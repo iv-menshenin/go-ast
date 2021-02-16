@@ -2,7 +2,6 @@ package builders
 
 import (
 	"fmt"
-	"github.com/iv-menshenin/dragonfly/utils"
 	"go/ast"
 	"go/token"
 	"regexp"
@@ -368,12 +367,12 @@ func doFuncPicker(funcName string, funcArgs ...string) ast.Expr {
 			}
 			return Call(userDefinedFunction, args...)
 		}
-		// functions with 'len' argument
-		if utils.ArrayContains([]string{
-			generateFunctionHex,
-			generateFunctionAlpha,
-			generateFunctionDigits,
-		}, funcArgs[0]) {
+		var funcNames = map[string]string{
+			generateFunctionHex:    "randomHex",
+			generateFunctionAlpha:  "randomAlpha",
+			generateFunctionDigits: "randomDigits",
+		}
+		if goFncName, ok := funcNames[funcArgs[0]]; ok {
 			var l = 16
 			if len(funcArgs) > 1 {
 				i, err := strconv.ParseInt(funcArgs[1], 10, 64)
@@ -381,17 +380,6 @@ func doFuncPicker(funcName string, funcArgs ...string) ast.Expr {
 					panic(err)
 				}
 				l = int(i)
-			}
-			var goFncName string
-			switch funcArgs[0] {
-			case generateFunctionHex:
-				goFncName = "randomHex"
-			case generateFunctionAlpha:
-				goFncName = "randomAlpha"
-			case generateFunctionDigits:
-				goFncName = "randomDigits"
-			default:
-				panic(fmt.Sprintf("cannot resolve function name `%s`", funcArgs[0]))
 			}
 			return Call(
 				CallFunctionDescriber{
@@ -520,4 +508,37 @@ func scanBlockForFindAll(stmts ...ast.Stmt) ast.Stmt {
 			)...,
 		),
 	}
+}
+
+func arrayFind(a []string, s string) int {
+	for i, elem := range a {
+		if elem == s {
+			return i
+		}
+	}
+	return -1
+}
+
+var (
+	tagsPattern   = regexp.MustCompile("^`((\\s*[a-z]+\\s*:\\s*\"[^\"]*\"\\s*)*)`$")
+	tagsExtractor = regexp.MustCompile("\\s*[a-z]+\\s*:\\s*\"[^\"]*\"\\s*")
+	tagPattern    = regexp.MustCompile("\\s*([a-z]+)\\s*:\\s*\"([^\"]*)\"\\s*")
+)
+
+func fieldTagToMap(tag string) (result map[string][]string) {
+	result = make(map[string][]string, 10)
+	sub := tagsPattern.FindAllStringSubmatch(tag, -1)
+	if len(sub) > 0 {
+		tagsUnquoted := sub[0][1]
+		extracted := tagsExtractor.FindAllString(tagsUnquoted, -1)
+		for _, tagChain := range extracted {
+			tagSmt := tagPattern.FindAllStringSubmatch(tagChain, -1)
+			list := strings.Split(tagSmt[0][2], ",")
+			for i, current := range list {
+				list[i] = strings.TrimSpace(current)
+			}
+			result[tagSmt[0][1]] = list
+		}
+	}
+	return
 }

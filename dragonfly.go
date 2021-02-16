@@ -2,7 +2,6 @@ package builders
 
 import (
 	"fmt"
-	"github.com/iv-menshenin/dragonfly/utils"
 	"go/ast"
 	"strings"
 )
@@ -501,7 +500,7 @@ func BuildInputValuesProcessor(
 	functionBody = make([]ast.Stmt, 0, len(optionFields)*3)
 	for _, field := range optionFields {
 		var (
-			tags      = utils.FieldTagToMap(field.Field.Tag.Value)
+			tags      = fieldTagToMap(field.Field.Tag.Value)
 			colName   = field.SourceSql
 			fieldName = SimpleSelector(funcInputOptionName, field.Field.Names[0].Name)
 		)
@@ -545,7 +544,7 @@ func BuildInputValuesProcessor(
 		if !isStarExpression && field.IsCustomType {
 			valueExpr = Ref(valueExpr)
 		}
-		if utils.ArrayFind(tags[TagTypeSQL], tagEncrypt) > 0 {
+		if arrayFind(tags[TagTypeSQL], tagEncrypt) > 0 {
 			if _, star := field.Field.Type.(*ast.StarExpr); star {
 				valueExpr = Star(valueExpr)
 			} else if field.IsMaybeType {
