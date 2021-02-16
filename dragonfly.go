@@ -493,14 +493,12 @@ func BuildInputValuesProcessor(
 	optionFields []MetaField,
 	options builderOptions,
 ) (
-	body []ast.Stmt,
+	functionBody []ast.Stmt,
 	declarations map[string]*ast.TypeSpec,
 	optionsFuncField []*ast.Field, // TODO get rid
 ) {
-	var (
-		optionStructFields = make([]*ast.Field, 0, len(optionFields))
-		functionBody       = make([]ast.Stmt, 0, len(optionFields)*3)
-	)
+	var optionStructFields = make([]*ast.Field, 0, len(optionFields))
+	functionBody = make([]ast.Stmt, 0, len(optionFields)*3)
 	for _, field := range optionFields {
 		var (
 			tags      = utils.FieldTagToMap(field.Field.Tag.Value)
@@ -561,6 +559,9 @@ func BuildInputValuesProcessor(
 				colName.sqlExpr(), valueExpr, options,
 			))...,
 		)
+	}
+	if len(optionStructFields) == 0 {
+		return functionBody, map[string]*ast.TypeSpec{}, []*ast.Field{}
 	}
 	return functionBody,
 		map[string]*ast.TypeSpec{
