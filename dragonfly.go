@@ -61,37 +61,199 @@ type (
 	SourceSqlSomeColumns struct {
 		ColumnNames []string
 	}
-	MetaFieldI interface {
-		isMetaFieldI()
+	DataCellFactory interface {
 		GetField() *ast.Field
+		SqlExpr() string
+		IsTagExists(tag string) bool
+		// GenerateFindArgumentCode is used to generate intermediate code that processes the value of one of the filter fields for an SQL query; as a result, it returns a piece of code that must perform the actions:
+		//  1.checking for null
+		//  2.setting additional segments of the where clause in the variable
+		//  3.adding values for request placeholders to the array
+		//
+		// boolean value (the second value of the result) indicates whether it is necessary to create a field for the structure (true) or this value will be generated automatically (false)
+		//
+		// Example:
+		//  // GenerateFindArgumentCode(filterOptionName, fieldName, option)
+		//  // generates following code:
+		//
+		//  type (
+		//	  RefsServiceTypesUpdateOption struct {
+		//      Code *string `json:"-" sql:"code,identifier,noUpdate"`
+		//	  }
+		//	  RefsServiceTypesUpdateValues struct {
+		//      Name  MaybeString `json:"-" sql:"name,required"`
+		//      Short MaybeString `json:"-" sql:"short,required"`
+		//	  }
+		//  )
+		//
+		//  func RefsServiceTypesUpdate(
+		//    ctx context.Context,
+		//    values RefsServiceTypesUpdateValues,
+		//    filter RefsServiceTypesUpdateOption, // filterOptionName = 'filter'
+		//  ) (
+		//    result RefsServiceTypesRow,
+		//    err error,
+		//  ) {
+		//    ...
+		//    if filter.Code != nil { // fieldName = 'Code'
+		//      ...
+		GenerateFindArgumentCode(string, string, builderOptions) ([]ast.Stmt, bool)
+
+		// GenerateInputArgumentCode is used to generate code that implements the process of processing data inserted into the database of a new record
+		//
+		// Example:
+		//  // GenerateInputArgumentCode(funcInputOptionName, options, isMaybe, isCustom)
+		GenerateInputArgumentCode(string, builderOptions, bool, bool) ([]ast.Stmt, bool)
 	}
-	MetaField struct {
-		Field           *ast.Field
-		SourceSql       SourceSql // sql mirror for field
-		CaseInsensitive bool
-		IsMaybeType     bool
-		IsCustomType    bool
-		CompareOperator SQLDataCompareOperator
-		Constant        string
+	dataCellField struct {
+		field      *ast.Field
+		source     SourceSql // sql mirror for field
+		tags       []string
+		comparator SQLDataCompareOperator
 	}
-	MetaFields []MetaFieldI
+	dataCellFieldCustomType struct {
+		dataCell dataCellField
+	}
+	dataCellFieldMaybeType struct {
+		dataCell dataCellField
+	}
+	dataCellFieldConstant struct {
+		dataCell dataCellField
+		constant string
+	}
+	groupedDataCells []DataCellFactory
 )
 
-func (f MetaField) isMetaFieldI() {
-	// interface
+func MakeDataCellFactoryType(
+	field *ast.Field,
+	source SourceSql,
+	tags []string,
+	comparator SQLDataCompareOperator,
+) DataCellFactory {
+	// tagCaseInsensitive
+	return dataCellField{
+		field:      field,
+		source:     source,
+		tags:       tags,
+		comparator: comparator,
+	}
 }
 
-func (f MetaFields) isMetaFieldI() {
-	// interface
+func MakeDataCellFactoryConstant(
+	field *ast.Field,
+	source SourceSql,
+	tags []string,
+	comparator SQLDataCompareOperator,
+	constant string,
+) DataCellFactory {
+	return dataCellFieldConstant{
+		dataCell: dataCellField{
+			field:      field,
+			source:     source,
+			tags:       tags,
+			comparator: comparator,
+		},
+		constant: constant,
+	}
 }
 
-func (f MetaField) GetField() *ast.Field {
-	return f.Field
+func MakeDataCellFactoryCustom(
+	field *ast.Field,
+	source SourceSql,
+	tags []string,
+	comparator SQLDataCompareOperator,
+) DataCellFactory {
+	return dataCellFieldCustomType{
+		dataCell: dataCellField{
+			field:      field,
+			source:     source,
+			tags:       tags,
+			comparator: comparator,
+		},
+	}
 }
 
-func (f MetaFields) GetField() *ast.Field {
+func MakeDataCellFactoryMaybe(
+	field *ast.Field,
+	source SourceSql,
+	tags []string,
+	comparator SQLDataCompareOperator,
+) DataCellFactory {
+	return dataCellFieldMaybeType{
+		dataCell: dataCellField{
+			field:      field,
+			source:     source,
+			tags:       tags,
+			comparator: comparator,
+		},
+	}
+}
+
+func MakeDataCellFactoryGrouped(dataCells []DataCellFactory) DataCellFactory {
+	return groupedDataCells(dataCells)
+}
+
+func (f dataCellField) GetField() *ast.Field {
+	return f.field
+}
+
+func (f dataCellFieldCustomType) GetField() *ast.Field {
+	return f.dataCell.GetField()
+}
+
+func (f dataCellFieldMaybeType) GetField() *ast.Field {
+	return f.dataCell.GetField()
+}
+
+func (f dataCellFieldConstant) GetField() *ast.Field {
+	return f.dataCell.GetField()
+}
+
+func (f groupedDataCells) GetField() *ast.Field {
 	panic("unimplemented")
 	return nil
+}
+
+func (f dataCellField) SqlExpr() string {
+	return f.source.sqlExpr()
+}
+
+func (f dataCellFieldCustomType) SqlExpr() string {
+	return f.dataCell.SqlExpr()
+}
+
+func (f dataCellFieldMaybeType) SqlExpr() string {
+	return f.dataCell.SqlExpr()
+}
+
+func (f dataCellFieldConstant) SqlExpr() string {
+	return f.dataCell.SqlExpr()
+}
+
+func (f groupedDataCells) SqlExpr() string {
+	panic("unimplemented")
+	return "null"
+}
+
+func (f dataCellField) IsTagExists(tag string) bool {
+	return arrayFind(f.tags, tag) > -1
+}
+
+func (f dataCellFieldCustomType) IsTagExists(tag string) bool {
+	return f.dataCell.IsTagExists(tag)
+}
+
+func (f dataCellFieldMaybeType) IsTagExists(tag string) bool {
+	return f.dataCell.IsTagExists(tag)
+}
+
+func (f dataCellFieldConstant) IsTagExists(tag string) bool {
+	return f.dataCell.IsTagExists(tag)
+}
+
+func (f groupedDataCells) IsTagExists(tag string) bool {
+	panic("unimplemented")
+	return false
 }
 
 func (s SourceSqlColumn) sqlExpr() string {
@@ -119,8 +281,9 @@ const (
 	generateFunctionAlpha  = "A"
 	generateFunctionDigits = "0"
 	// column tags
-	tagGenerate = "generate"
-	tagEncrypt  = "encrypt"
+	tagGenerate        = "generate"
+	tagEncrypt         = "encrypt"
+	tagCaseInsensitive = "ci"
 	// sql data comparing variants
 	CompareEqual     SQLDataCompareOperator = "equal"
 	CompareNotEqual  SQLDataCompareOperator = "notEqual"
@@ -308,7 +471,7 @@ func (c SQLDataCompareOperator) getBuilder() iOperator {
 // references for the output structure. Column and field positions correspond to each other
 func ExtractDestinationFieldRefsFromStruct(
 	rowVariableName string,
-	rowStructureFields []MetaFieldI,
+	rowStructureFields []DataCellFactory,
 ) (
 	destinationStructureFields []ast.Expr,
 	sourceTableColumnNames []string,
@@ -316,13 +479,9 @@ func ExtractDestinationFieldRefsFromStruct(
 	destinationStructureFields = make([]ast.Expr, 0, len(rowStructureFields))
 	sourceTableColumnNames = make([]string, 0, len(rowStructureFields))
 	for _, field := range rowStructureFields {
-		if field, ok := field.(MetaField); ok {
-			for _, fName := range field.Field.Names {
-				destinationStructureFields = append(destinationStructureFields, Ref(SimpleSelector(rowVariableName, fName.Name)))
-				sourceTableColumnNames = append(sourceTableColumnNames, field.SourceSql.sqlExpr())
-			}
-		} else {
-			panic("this process supports only MetaField struct")
+		for _, fName := range field.GetField().Names {
+			destinationStructureFields = append(destinationStructureFields, Ref(SimpleSelector(rowVariableName, fName.Name)))
+			sourceTableColumnNames = append(sourceTableColumnNames, field.SqlExpr())
 		}
 	}
 	return
@@ -388,49 +547,61 @@ func BuildExecutionBlockForFunction(
 func makeFindProcessorForUnion(
 	funcFilterOptionName, fieldName string,
 	union []string,
-	field MetaField,
+	field dataCellField,
 	options builderOptions,
 ) []ast.Stmt {
-	if field.CompareOperator.IsMult() {
-		panic(fmt.Sprintf("joins cannot be used in multiple expressions, for example '%s' in the expression '%s'", fieldName, field.CompareOperator))
+	caseInsensitive := field.IsTagExists(tagCaseInsensitive)
+	if field.comparator.IsMult() {
+		panic(fmt.Sprintf("joins cannot be used in multiple expressions, for example '%s' in the expression '%s'", fieldName, field.comparator))
 	}
-	if _, ok := field.Field.Type.(*ast.StarExpr); ok {
+	if _, ok := field.field.Type.(*ast.StarExpr); ok {
 		return []ast.Stmt{
 			If(
 				NotEqual(SimpleSelector(funcFilterOptionName, fieldName), Nil),
-				field.CompareOperator.getBuilder().makeUnionQueryOption(Star(SimpleSelector(funcFilterOptionName, fieldName)), union, field.CaseInsensitive, options)...,
+				field.comparator.getBuilder().makeUnionQueryOption(Star(SimpleSelector(funcFilterOptionName, fieldName)), union, caseInsensitive, options)...,
 			),
 		}
 	} else {
-		return field.CompareOperator.getBuilder().makeUnionQueryOption(SimpleSelector(funcFilterOptionName, fieldName), union, field.CaseInsensitive, options)
+		return field.comparator.getBuilder().makeUnionQueryOption(SimpleSelector(funcFilterOptionName, fieldName), union, caseInsensitive, options)
 	}
 }
 
-func makeFindProcessorForSingle(
+func (f dataCellField) GenerateFindArgumentCode(
 	funcFilterOptionName, fieldName string,
-	field MetaField,
 	options builderOptions,
-) []ast.Stmt {
-	if _, ok := field.Field.Type.(*ast.StarExpr); ok {
-		return []ast.Stmt{
+) (stmt []ast.Stmt, addField bool) {
+	addField = true
+	caseInsensitive := f.IsTagExists(tagCaseInsensitive)
+	if f.comparator.IsMult() {
+		stmt = f.comparator.getBuilder().makeArrayQueryOption(funcFilterOptionName, fieldName, f.source.sqlExpr(), caseInsensitive, options)
+	}
+	if union, ok := f.source.(SourceSqlSomeColumns); ok {
+		makeFindProcessorForUnion(funcFilterOptionName, fieldName, union.ColumnNames, f, options)
+	}
+	if _, ok := f.field.Type.(*ast.StarExpr); ok {
+		stmt = []ast.Stmt{
 			If(
 				NotEqual(SimpleSelector(funcFilterOptionName, fieldName), Nil),
-				field.CompareOperator.getBuilder().makeScalarQueryOption(funcFilterOptionName, fieldName, field.SourceSql.sqlExpr(), field.CaseInsensitive, true, options)...,
+				f.comparator.getBuilder().makeScalarQueryOption(funcFilterOptionName, fieldName, f.source.sqlExpr(), caseInsensitive, true, options)...,
 			),
 		}
 	} else {
-		return field.CompareOperator.getBuilder().makeScalarQueryOption(funcFilterOptionName, fieldName, field.SourceSql.sqlExpr(), field.CaseInsensitive, false, options)
+		stmt = f.comparator.getBuilder().makeScalarQueryOption(funcFilterOptionName, fieldName, f.source.sqlExpr(), caseInsensitive, false, options)
 	}
+	return
 }
 
-func makeFindProcessorForConst(
-	funcFilterOptionName, fieldName string,
-	field MetaField,
+func (f dataCellFieldConstant) GenerateFindArgumentCode(
+	funcFilterOptionName, _ string,
 	options builderOptions,
-) []ast.Stmt {
+) (stmt []ast.Stmt, addField bool) {
+	caseInsensitive := f.IsTagExists(tagCaseInsensitive)
+	if f.dataCell.comparator.IsMult() {
+		panic("constants cannot be used in multiple expressions")
+	}
 	var (
 		operatorValue = "/* %s */ %s"
-		tmpOperator   = field.CompareOperator.getBuilder()
+		tmpOperator   = f.dataCell.comparator.getBuilder()
 	)
 	if o, ok := tmpOperator.(opInline); ok {
 		operatorValue = o.operator
@@ -442,10 +613,41 @@ func makeFindProcessorForConst(
 			operator: operatorValue,
 		},
 	}
-	return newOperator.makeScalarQueryOption(funcFilterOptionName, field.Constant, field.SourceSql.sqlExpr(), field.CaseInsensitive, false, options)
+	stmt = newOperator.makeScalarQueryOption(
+		funcFilterOptionName, // TODO ?
+		f.constant,
+		f.dataCell.source.sqlExpr(),
+		caseInsensitive,
+		false,
+		options,
+	)
+	addField = false
+	return
 }
 
-func (mf MetaField) buildFindArgumentsProcessor(
+func (f dataCellFieldCustomType) GenerateFindArgumentCode(
+	funcFilterOptionName, fieldName string,
+	options builderOptions,
+) (stmt []ast.Stmt, addField bool) {
+	return f.dataCell.GenerateFindArgumentCode(funcFilterOptionName, fieldName, options)
+}
+
+func (f dataCellFieldMaybeType) GenerateFindArgumentCode(
+	funcFilterOptionName, fieldName string,
+	options builderOptions,
+) (stmt []ast.Stmt, addField bool) {
+	return f.dataCell.GenerateFindArgumentCode(funcFilterOptionName, fieldName, options)
+}
+
+func (f groupedDataCells) GenerateFindArgumentCode(
+	funcFilterOptionName, fieldName string,
+	options builderOptions,
+) (stmt []ast.Stmt, addField bool) {
+	panic("unimplemented")
+}
+
+func buildFindArgumentsProcessor(
+	dataCell DataCellFactory,
 	funcFilterOptionName string,
 	options builderOptions,
 ) (
@@ -454,28 +656,14 @@ func (mf MetaField) buildFindArgumentsProcessor(
 ) {
 	functionBody = make([]ast.Stmt, 0, 10)
 	optionsFieldList = make([]*ast.Field, 0, 5)
-	if len(mf.Field.Names) != 1 {
+	if len(dataCell.GetField().Names) != 1 {
 		panic("not supported names count")
 	}
-	var fieldName = mf.Field.Names[0].Name
-	if union, ok := mf.SourceSql.(SourceSqlSomeColumns); ok {
-		functionBody = append(functionBody, makeFindProcessorForUnion(funcFilterOptionName, fieldName, union.ColumnNames, mf, options)...)
-		optionsFieldList = append(optionsFieldList, mf.Field)
-	} else {
-		if mf.CompareOperator.IsMult() {
-			functionBody = append(
-				functionBody,
-				mf.CompareOperator.getBuilder().makeArrayQueryOption(funcFilterOptionName, fieldName, mf.SourceSql.sqlExpr(), mf.CaseInsensitive, options)...,
-			)
-			optionsFieldList = append(optionsFieldList, mf.Field)
-		} else {
-			if mf.Constant != "" {
-				functionBody = append(functionBody, makeFindProcessorForConst(funcFilterOptionName, fieldName, mf, options)...)
-			} else {
-				functionBody = append(functionBody, makeFindProcessorForSingle(funcFilterOptionName, fieldName, mf, options)...)
-				optionsFieldList = append(optionsFieldList, mf.Field)
-			}
-		}
+	var fieldName = dataCell.GetField().Names[0].Name
+	stmts, addField := dataCell.GenerateFindArgumentCode(funcFilterOptionName, fieldName, options)
+	functionBody = append(functionBody, stmts...)
+	if addField {
+		optionsFieldList = append(optionsFieldList, dataCell.GetField())
 	}
 	return
 }
@@ -487,7 +675,7 @@ func (mf MetaField) buildFindArgumentsProcessor(
 func BuildFindArgumentsProcessor(
 	funcFilterOptionName string,
 	funcFilterOptionTypeName string,
-	optionFields []MetaFieldI,
+	optionFields []DataCellFactory,
 	options builderOptions,
 ) (
 	body []ast.Stmt,
@@ -501,11 +689,7 @@ func BuildFindArgumentsProcessor(
 	)
 	for i, field := range optionFields {
 		switch f := field.(type) {
-		case MetaField:
-			functionBodyEx, optionsFieldListEx := f.buildFindArgumentsProcessor(funcFilterOptionName, options)
-			functionBody = append(functionBody, functionBodyEx...)
-			optionsFieldList = append(optionsFieldList, optionsFieldListEx...)
-		case MetaFields:
+		case groupedDataCells:
 			// TODO move out
 			var newFieldName = "Sub"
 			for _, mf := range f {
@@ -544,7 +728,9 @@ func BuildFindArgumentsProcessor(
 			))
 			optionsFieldList = append(optionsFieldList, ff2...)
 		default:
-			panic("unimplemented")
+			functionBodyEx, optionsFieldListEx := buildFindArgumentsProcessor(f, funcFilterOptionName, options)
+			functionBody = append(functionBody, functionBodyEx...)
+			optionsFieldList = append(optionsFieldList, optionsFieldListEx...)
 		}
 	}
 	declarations[funcFilterOptionTypeName] = &ast.TypeSpec{
@@ -564,10 +750,105 @@ func BuildFindArgumentsProcessor(
 		}
 }
 
+func (f dataCellField) GenerateInputArgumentCode(
+	funcInputOptionName string,
+	options builderOptions,
+	isMaybe, isCustom bool, // TODO not clear logic
+) (stmt []ast.Stmt, omitted bool) {
+	var (
+		valueExpr ast.Expr
+		tags      = fieldTagToMap(f.field.Tag.Value)
+		colName   = f.source
+		fieldName = SimpleSelector(funcInputOptionName, f.field.Names[0].Name)
+	)
+	/* omitted - value will never be requested from the user */
+	valueExpr, omitted = makeValuePicker(tags[TagTypeSQL][1:], fieldName)
+	/* test wrappers
+	if !value.omitted { ... }
+	*/
+	wrapFunc := func(stmts []ast.Stmt) []ast.Stmt { return stmts }
+	if !omitted && isMaybe {
+		wrapFunc = func(stmts []ast.Stmt) []ast.Stmt {
+			fncName := &ast.SelectorExpr{
+				X:   fieldName,
+				Sel: ast.NewIdent("IsOmitted"),
+			}
+			return []ast.Stmt{
+				If(
+					Not(Call(
+						CallFunctionDescriber{
+							FunctionName:                fncName,
+							MinimumNumberOfArguments:    0,
+							ExtensibleNumberOfArguments: false,
+						},
+					)),
+					stmts...,
+				),
+			}
+		}
+	}
+	_, isStarExpression := f.field.Type.(*ast.StarExpr)
+	if isStarExpression && !omitted {
+		wrapFunc = func(stmts []ast.Stmt) []ast.Stmt {
+			return []ast.Stmt{
+				If(NotNil(fieldName), stmts...),
+			}
+		}
+	}
+	if !isStarExpression && isCustom {
+		valueExpr = Ref(valueExpr)
+	}
+	if arrayFind(tags[TagTypeSQL], tagEncrypt) > 0 {
+		if _, star := f.field.Type.(*ast.StarExpr); star {
+			valueExpr = Star(valueExpr)
+		} else if isMaybe {
+			valueExpr = Selector(valueExpr, "value")
+		}
+		valueExpr = makeEncryptPasswordCall(valueExpr)
+	}
+	stmt = wrapFunc(processValueWrapper(
+		colName.sqlExpr(), valueExpr, options,
+	))
+	return
+}
+
+func (f dataCellFieldConstant) GenerateInputArgumentCode(
+	funcInputOptionName string,
+	options builderOptions,
+	isMaybe, isCustom bool,
+) (stmt []ast.Stmt, omitted bool) {
+	// TODO what we must to do?
+	return f.dataCell.GenerateInputArgumentCode(funcInputOptionName, options, isMaybe, isCustom)
+}
+
+func (f dataCellFieldCustomType) GenerateInputArgumentCode(
+	funcInputOptionName string,
+	options builderOptions,
+	isMaybe, isCustom bool,
+) (stmt []ast.Stmt, omitted bool) {
+	return f.dataCell.GenerateInputArgumentCode(funcInputOptionName, options, isMaybe, true)
+}
+
+func (f dataCellFieldMaybeType) GenerateInputArgumentCode(
+	funcInputOptionName string,
+	options builderOptions,
+	isMaybe, isCustom bool,
+) (stmt []ast.Stmt, omitted bool) {
+	return f.dataCell.GenerateInputArgumentCode(funcInputOptionName, options, true, isCustom)
+}
+
+func (f groupedDataCells) GenerateInputArgumentCode(
+	funcInputOptionName string,
+	options builderOptions,
+	isMaybe, isCustom bool,
+) (stmt []ast.Stmt, omitted bool) {
+	panic("not implemented")
+}
+
 func BuildInputValuesProcessor(
 	funcInputOptionName string,
 	funcInputOptionTypeName string,
-	optionFields []MetaFieldI,
+	optionFields []DataCellFactory,
 	options builderOptions,
 ) (
 	functionBody []ast.Stmt,
@@ -577,69 +858,11 @@ func BuildInputValuesProcessor(
 	var optionStructFields = make([]*ast.Field, 0, len(optionFields))
 	functionBody = make([]ast.Stmt, 0, len(optionFields)*3)
 	for _, field := range optionFields {
-		field, ok := field.(MetaField)
-		if !ok {
-			panic("supports only MetaField")
+		stmt, omitted := field.GenerateInputArgumentCode(funcInputOptionName, options, false, false)
+		if !omitted {
+			optionStructFields = append(optionStructFields, field.GetField())
 		}
-		var (
-			tags      = fieldTagToMap(field.Field.Tag.Value)
-			colName   = field.SourceSql
-			fieldName = SimpleSelector(funcInputOptionName, field.Field.Names[0].Name)
-		)
-		/* isOmittedField - value will never be requested from the user */
-		valueExpr, isOmittedField := makeValuePicker(tags[TagTypeSQL][1:], fieldName)
-		if !isOmittedField {
-			optionStructFields = append(optionStructFields, field.Field)
-		}
-		/* test wrappers
-		if !value.omitted { ... }
-		*/
-		wrapFunc := func(stmts []ast.Stmt) []ast.Stmt { return stmts }
-		if !isOmittedField && field.IsMaybeType {
-			wrapFunc = func(stmts []ast.Stmt) []ast.Stmt {
-				fncName := &ast.SelectorExpr{
-					X:   fieldName,
-					Sel: ast.NewIdent("IsOmitted"),
-				}
-				return []ast.Stmt{
-					If(
-						Not(Call(
-							CallFunctionDescriber{
-								FunctionName:                fncName,
-								MinimumNumberOfArguments:    0,
-								ExtensibleNumberOfArguments: false,
-							},
-						)),
-						stmts...,
-					),
-				}
-			}
-		}
-		_, isStarExpression := field.Field.Type.(*ast.StarExpr)
-		if isStarExpression && !isOmittedField {
-			wrapFunc = func(stmts []ast.Stmt) []ast.Stmt {
-				return []ast.Stmt{
-					If(NotNil(fieldName), stmts...),
-				}
-			}
-		}
-		if !isStarExpression && field.IsCustomType {
-			valueExpr = Ref(valueExpr)
-		}
-		if arrayFind(tags[TagTypeSQL], tagEncrypt) > 0 {
-			if _, star := field.Field.Type.(*ast.StarExpr); star {
-				valueExpr = Star(valueExpr)
-			} else if field.IsMaybeType {
-				valueExpr = Selector(valueExpr, "value")
-			}
-			valueExpr = makeEncryptPasswordCall(valueExpr)
-		}
-		functionBody = append(
-			functionBody,
-			wrapFunc(processValueWrapper(
-				colName.sqlExpr(), valueExpr, options,
-			))...,
-		)
+		functionBody = append(functionBody, stmt...)
 	}
 	if len(optionStructFields) == 0 {
 		return functionBody, map[string]*ast.TypeSpec{}, []*ast.Field{}
