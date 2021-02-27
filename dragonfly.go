@@ -3,6 +3,7 @@ package builders
 import (
 	"fmt"
 	"go/ast"
+	"strconv"
 	"strings"
 )
 
@@ -60,6 +61,10 @@ type (
 	SourceSqlSomeColumns struct {
 		ColumnNames []string
 	}
+	MetaFieldI interface {
+		isMetaFieldI()
+		GetField() *ast.Field
+	}
 	MetaField struct {
 		Field           *ast.Field
 		SourceSql       SourceSql // sql mirror for field
@@ -69,7 +74,25 @@ type (
 		CompareOperator SQLDataCompareOperator
 		Constant        string
 	}
+	MetaFields []MetaFieldI
 )
+
+func (f MetaField) isMetaFieldI() {
+	// interface
+}
+
+func (f MetaFields) isMetaFieldI() {
+	// interface
+}
+
+func (f MetaField) GetField() *ast.Field {
+	return f.Field
+}
+
+func (f MetaFields) GetField() *ast.Field {
+	panic("unimplemented")
+	return nil
+}
 
 func (s SourceSqlColumn) sqlExpr() string {
 	return s.ColumnName
@@ -281,11 +304,11 @@ func (c SQLDataCompareOperator) getBuilder() iOperator {
 	panic(fmt.Sprintf("cannot find template for operator '%s'", string(c)))
 }
 
-// get a list of table columns and variable fields references for the output structure.
-// column and field positions correspond to each other
+// ExtractDestinationFieldRefsFromStruct extracts the list of table columns and generates variable field
+// references for the output structure. Column and field positions correspond to each other
 func ExtractDestinationFieldRefsFromStruct(
 	rowVariableName string,
-	rowStructureFields []MetaField,
+	rowStructureFields []MetaFieldI,
 ) (
 	destinationStructureFields []ast.Expr,
 	sourceTableColumnNames []string,
@@ -293,20 +316,17 @@ func ExtractDestinationFieldRefsFromStruct(
 	destinationStructureFields = make([]ast.Expr, 0, len(rowStructureFields))
 	sourceTableColumnNames = make([]string, 0, len(rowStructureFields))
 	for _, field := range rowStructureFields {
-		for _, fName := range field.Field.Names {
-			destinationStructureFields = append(destinationStructureFields, Ref(SimpleSelector(rowVariableName, fName.Name)))
-			sourceTableColumnNames = append(sourceTableColumnNames, field.SourceSql.sqlExpr())
+		if field, ok := field.(MetaField); ok {
+			for _, fName := range field.Field.Names {
+				destinationStructureFields = append(destinationStructureFields, Ref(SimpleSelector(rowVariableName, fName.Name)))
+				sourceTableColumnNames = append(sourceTableColumnNames, field.SourceSql.sqlExpr())
+			}
+		} else {
+			panic("this process supports only MetaField struct")
 		}
 	}
 	return
 }
-
-type (
-	resultPair struct {
-		n string
-		t ast.Expr
-	}
-)
 
 func MakeDatabaseApiFunction(
 	functionName string,
@@ -425,6 +445,41 @@ func makeFindProcessorForConst(
 	return newOperator.makeScalarQueryOption(funcFilterOptionName, field.Constant, field.SourceSql.sqlExpr(), field.CaseInsensitive, false, options)
 }
 
+func (mf MetaField) buildFindArgumentsProcessor(
+	funcFilterOptionName string,
+	options builderOptions,
+) (
+	functionBody []ast.Stmt,
+	optionsFieldList []*ast.Field,
+) {
+	functionBody = make([]ast.Stmt, 0, 10)
+	optionsFieldList = make([]*ast.Field, 0, 5)
+	if len(mf.Field.Names) != 1 {
+		panic("not supported names count")
+	}
+	var fieldName = mf.Field.Names[0].Name
+	if union, ok := mf.SourceSql.(SourceSqlSomeColumns); ok {
+		functionBody = append(functionBody, makeFindProcessorForUnion(funcFilterOptionName, fieldName, union.ColumnNames, mf, options)...)
+		optionsFieldList = append(optionsFieldList, mf.Field)
+	} else {
+		if mf.CompareOperator.IsMult() {
+			functionBody = append(
+				functionBody,
+				mf.CompareOperator.getBuilder().makeArrayQueryOption(funcFilterOptionName, fieldName, mf.SourceSql.sqlExpr(), mf.CaseInsensitive, options)...,
+			)
+			optionsFieldList = append(optionsFieldList, mf.Field)
+		} else {
+			if mf.Constant != "" {
+				functionBody = append(functionBody, makeFindProcessorForConst(funcFilterOptionName, fieldName, mf, options)...)
+			} else {
+				functionBody = append(functionBody, makeFindProcessorForSingle(funcFilterOptionName, fieldName, mf, options)...)
+				optionsFieldList = append(optionsFieldList, mf.Field)
+			}
+		}
+	}
+	return
+}
+
 /*
 	Extracts required and optional parameters from incoming arguments, builds program code
 	Returns the body of program code, required type declarations and required input fields
@@ -432,52 +487,75 @@ func makeFindProcessorForConst(
 func BuildFindArgumentsProcessor(
 	funcFilterOptionName string,
 	funcFilterOptionTypeName string,
-	optionFields []MetaField,
+	optionFields []MetaFieldI,
 	options builderOptions,
 ) (
 	body []ast.Stmt,
 	declarations map[string]*ast.TypeSpec,
 	optionsFuncField []*ast.Field, // TODO get rid
 ) {
+	declarations = make(map[string]*ast.TypeSpec)
 	var (
 		functionBody     = make([]ast.Stmt, 0, len(optionFields)*3)
 		optionsFieldList = make([]*ast.Field, 0, len(optionFields))
 	)
-	for _, field := range optionFields {
-		if len(field.Field.Names) != 1 {
-			panic("not supported names count")
-		}
-		var fieldName = field.Field.Names[0].Name
-		if union, ok := field.SourceSql.(SourceSqlSomeColumns); ok {
-			functionBody = append(functionBody, makeFindProcessorForUnion(funcFilterOptionName, fieldName, union.ColumnNames, field, options)...)
-			optionsFieldList = append(optionsFieldList, field.Field)
-		} else {
-			if field.CompareOperator.IsMult() {
-				functionBody = append(
-					functionBody,
-					field.CompareOperator.getBuilder().makeArrayQueryOption(funcFilterOptionName, fieldName, field.SourceSql.sqlExpr(), field.CaseInsensitive, options)...,
-				)
-				optionsFieldList = append(optionsFieldList, field.Field)
-			} else {
-				if field.Constant != "" {
-					functionBody = append(functionBody, makeFindProcessorForConst(funcFilterOptionName, fieldName, field, options)...)
-				} else {
-					functionBody = append(functionBody, makeFindProcessorForSingle(funcFilterOptionName, fieldName, field, options)...)
-					optionsFieldList = append(optionsFieldList, field.Field)
+	for i, field := range optionFields {
+		switch f := field.(type) {
+		case MetaField:
+			functionBodyEx, optionsFieldListEx := f.buildFindArgumentsProcessor(funcFilterOptionName, options)
+			functionBody = append(functionBody, functionBodyEx...)
+			optionsFieldList = append(optionsFieldList, optionsFieldListEx...)
+		case MetaFields:
+			// TODO move out
+			var newFieldName = "Sub"
+			for _, mf := range f {
+				if strings.Index(newFieldName, mf.GetField().Names[0].Name) < 0 {
+					newFieldName += mf.GetField().Names[0].Name
 				}
 			}
+			var (
+				newVarNameAsField  = newFieldName
+				internalOptionName = funcFilterOptionTypeName + strconv.Itoa(i)
+				newVarName         = options.variableForColumnExpr + variableName(strconv.Itoa(i))
+			)
+			functionBody = append(functionBody, Var(
+				VariableValue(newVarNameAsField, Selector(ast.NewIdent(funcFilterOptionName), newVarNameAsField)),
+				VariableValue(string(newVarName), Call(MakeFn, ArrayType(String), IntegerConstant(0).Expr())),
+			))
+			body2, decl2, ff2 := BuildFindArgumentsProcessor(newVarNameAsField, internalOptionName, f, builderOptions{
+				appendValueFormat:       options.appendValueFormat,
+				variableForColumnNames:  options.variableForColumnNames,
+				variableForColumnValues: options.variableForColumnValues,
+				variableForColumnExpr:   newVarName,
+			})
+			functionBody = append(functionBody, body2...)
+			for k, v := range decl2 {
+				declarations[k] = v
+			}
+			// filters = append(filters, "(" + strings.Join(subFilters, " or ") + ")")
+			functionBody = append(functionBody, Assign(
+				VarNames{options.variableForColumnExpr.String()},
+				Assignment,
+				Call(AppendFn, options.variableForColumnExpr.makeExpr(), Add(
+					StringConstant("(").Expr(),
+					Call(StringsJoinFn, newVarName.makeExpr(), StringConstant(" or ").Expr()),
+					StringConstant(")").Expr(),
+				)),
+			))
+			optionsFieldList = append(optionsFieldList, ff2...)
+		default:
+			panic("unimplemented")
 		}
 	}
-	return functionBody,
-		map[string]*ast.TypeSpec{
-			funcFilterOptionTypeName: {
-				Name: ast.NewIdent(funcFilterOptionTypeName),
-				Type: &ast.StructType{
-					Fields:     &ast.FieldList{List: optionsFieldList},
-					Incomplete: false,
-				},
-			},
+	declarations[funcFilterOptionTypeName] = &ast.TypeSpec{
+		Name: ast.NewIdent(funcFilterOptionTypeName),
+		Type: &ast.StructType{
+			Fields:     &ast.FieldList{List: optionsFieldList},
+			Incomplete: false,
 		},
+	}
+	return functionBody,
+		declarations,
 		[]*ast.Field{
 			{
 				Names: []*ast.Ident{ast.NewIdent(funcFilterOptionName)},
@@ -489,7 +567,7 @@ func BuildFindArgumentsProcessor(
 func BuildInputValuesProcessor(
 	funcInputOptionName string,
 	funcInputOptionTypeName string,
-	optionFields []MetaField,
+	optionFields []MetaFieldI,
 	options builderOptions,
 ) (
 	functionBody []ast.Stmt,
@@ -499,6 +577,10 @@ func BuildInputValuesProcessor(
 	var optionStructFields = make([]*ast.Field, 0, len(optionFields))
 	functionBody = make([]ast.Stmt, 0, len(optionFields)*3)
 	for _, field := range optionFields {
+		field, ok := field.(MetaField)
+		if !ok {
+			panic("supports only MetaField")
+		}
 		var (
 			tags      = fieldTagToMap(field.Field.Tag.Value)
 			colName   = field.SourceSql
