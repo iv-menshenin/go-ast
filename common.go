@@ -51,6 +51,9 @@ var (
 
 	// context.Context
 	ContextType = SimpleSelector("context", "Context")
+
+	// error
+	ErrorType = ast.NewIdent("error")
 )
 
 func makeImportSpec(lPos *token.Pos, imports map[string]string) []ast.Spec {
