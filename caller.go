@@ -8,11 +8,17 @@ type (
 		FunctionName                ast.Expr
 		MinimumNumberOfArguments    int  /* strict number of arguments, unless indicated that it can expand */
 		ExtensibleNumberOfArguments bool /* number of arguments can expand */
+		MultipleReturnValues        bool
 	}
 )
 
 func makeFunc(n ast.Expr, m int, e bool) CallFunctionDescriber {
-	return CallFunctionDescriber{n, m, e}
+	return CallFunctionDescriber{
+		FunctionName:                n,
+		MinimumNumberOfArguments:    m,
+		ExtensibleNumberOfArguments: e,
+		MultipleReturnValues:        false,
+	}
 }
 
 func (c CallFunctionDescriber) checkArgsCount(a int) {
