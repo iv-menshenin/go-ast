@@ -8,17 +8,18 @@ import (
 )
 
 type (
-	varValue interface {
-		Expr() ast.Expr
+	VarValue interface {
+		Expr() *ast.BasicLit
 	}
-	StringConstant  string  // string constant e.g. "abc"
-	IntegerConstant int64   // integer constant e.g. 123
-	FloatConstant   float64 // float constant e.g. 123.45
-	VariableName    string  // any variable name
+	StringConstant   string  // string constant e.g. "abc"
+	IntegerConstant  int64   // integer constant e.g. 123
+	UnsignedConstant uint64  // unsigned integer constant e.g. 123
+	FloatConstant    float64 // float constant e.g. 123.45
+	VariableName     string  // any variable name
 )
 
 // ast.BasicLit with token.STRING
-func (c StringConstant) Expr() ast.Expr {
+func (c StringConstant) Expr() *ast.BasicLit {
 	if strings.Contains(string(c), "\"") || strings.Contains(string(c), "\n") {
 		return &ast.BasicLit{
 			Kind:  token.STRING,
@@ -33,7 +34,16 @@ func (c StringConstant) Expr() ast.Expr {
 }
 
 // ast.BasicLit with token.INT
-func (c IntegerConstant) Expr() ast.Expr {
+func (c IntegerConstant) Expr() *ast.BasicLit {
+	return &ast.BasicLit{
+		ValuePos: 1,
+		Kind:     token.INT,
+		Value:    fmt.Sprintf("%d", c),
+	}
+}
+
+// ast.BasicLit with token.INT
+func (c UnsignedConstant) Expr() *ast.BasicLit {
 	return &ast.BasicLit{
 		ValuePos: 1,
 		Kind:     token.INT,
@@ -42,7 +52,7 @@ func (c IntegerConstant) Expr() ast.Expr {
 }
 
 // ast.BasicLit with token.FLOAT
-func (c FloatConstant) Expr() ast.Expr {
+func (c FloatConstant) Expr() *ast.BasicLit {
 	return &ast.BasicLit{
 		ValuePos: 1,
 		Kind:     token.FLOAT,
@@ -56,7 +66,7 @@ func (c VariableName) Expr() ast.Expr {
 }
 
 // somevar[1]
-func Index(x ast.Expr, index varValue) ast.Expr {
+func Index(x ast.Expr, index VarValue) ast.Expr {
 	return &ast.IndexExpr{
 		X:      x,
 		Lbrack: 1,
@@ -134,6 +144,15 @@ func ArrayType(expr ast.Expr, l ...ast.Expr) ast.Expr {
 		Lbrack: 1,
 		Len:    lenExpr,
 		Elt:    expr,
+	}
+}
+
+// map[<T>]<expr>
+func MapType(key, expr ast.Expr) ast.Expr {
+	return &ast.MapType{
+		Map:   1,
+		Key:   key,
+		Value: expr,
 	}
 }
 

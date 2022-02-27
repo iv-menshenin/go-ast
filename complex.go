@@ -15,7 +15,9 @@ func MakeTagsForField(tags map[string][]string) *ast.BasicLit {
 	}
 	arrTags := make([]string, 0, len(tags))
 	for key, val := range tags {
-		arrTags = append(arrTags, fmt.Sprintf("%s:\"%s\"", key, strings.Join(val, ",")))
+		if len(val) > 0 {
+			arrTags = append(arrTags, fmt.Sprintf("%s:\"%s\"", key, strings.Join(val, ",")))
+		}
 	}
 	sort.Strings(arrTags)
 	return &ast.BasicLit{

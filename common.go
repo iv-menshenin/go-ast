@@ -8,109 +8,100 @@ import (
 )
 
 var (
-	// 0
+	// Zero equals 0 constant
 	Zero = IntegerConstant(0).Expr()
-	// _
+	// Blank equals _ ident
 	Blank = ast.NewIdent("_")
-	// nil
+	// Nil equals nil ident
 	Nil = ast.NewIdent("nil")
-	// interface{}
+	// EmptyInterface equals empty interface
 	EmptyInterface = &ast.InterfaceType{
-		Methods: &ast.FieldList{},
+		Methods:    &ast.FieldList{},
+		Incomplete: true, // todo ? check it
 	}
 
-	// uint
+	// UInt represents the data type uint
 	UInt = ast.NewIdent("uint")
-	// uint8
+	// UInt8 represents the data type uint8
 	UInt8 = ast.NewIdent("uint8")
-	// uint16
+	// UInt16 represents the data type uint16
 	UInt16 = ast.NewIdent("uint16")
-	// uint32
+	// UInt32 represents the data type uint32
 	UInt32 = ast.NewIdent("uint32")
-	// uint64
+	// UInt64 represents the data type uint64
 	UInt64 = ast.NewIdent("uint64")
 
-	// int
+	// Int represents the data type int
 	Int = ast.NewIdent("int")
-	// int8
+	// Int8 represents the data type int8
 	Int8 = ast.NewIdent("int8")
-	// int16
+	// Int16 represents the data type int16
 	Int16 = ast.NewIdent("int16")
-	// int32
+	// Int32 represents the data type int32
 	Int32 = ast.NewIdent("int32")
-	// int64
+	// Int64 represents the data type int64
 	Int64 = ast.NewIdent("int64")
 
-	// float32
+	// Float32 represents the data type float32
 	Float32 = ast.NewIdent("float32")
-	// float64
+	// Float64 represents the data type float64
 	Float64 = ast.NewIdent("float64")
 
-	// string
+	// String represents the data type string
 	String = ast.NewIdent("string")
 
-	// context.Context
+	// ContextType represents the `context.Context` interface
 	ContextType = SimpleSelector("context", "Context")
 
-	// error
+	// ErrorType represents the `error` interface
 	ErrorType = ast.NewIdent("error")
 )
 
-func makeImportSpec(lPos *token.Pos, imports map[string]string) []ast.Spec {
+// Import represents import declaration with token.IMPORT
+func Import(imports map[string]string) ast.Decl {
+	var impSpec []ast.Spec
+	impSpec = makeImportSpec(imports)
+	return &ast.GenDecl{
+		Tok:   token.IMPORT,
+		Specs: impSpec,
+	}
+}
+
+func makeImportSpec(imports map[string]string) []ast.Spec {
 	var impSpec = make([]ast.Spec, 0, len(imports))
 	for packageKey, packagePath := range imports {
-		packageAlias := ast.NewIdent(packageKey)
-		pathSgms := strings.Split(packagePath, "/")
-		if pathSgms[len(pathSgms)-1] == packageKey {
-			packageAlias = nil
-		} else {
-			packageAlias.NamePos = *lPos
-		}
-		impSpec = append(impSpec, &ast.ImportSpec{
-			Name: packageAlias,
+		pathSplit := strings.Split(packagePath, "/")
+		impElm := ast.ImportSpec{
 			Path: &ast.BasicLit{
-				ValuePos: *lPos,
-				Kind:     token.STRING,
-				Value:    fmt.Sprintf("\"%s\"", packagePath),
+				Kind:  token.STRING,
+				Value: fmt.Sprintf("\"%s\"", packagePath),
 			},
-		})
-		*lPos++
+		}
+		// fixme: in general - this is lie
+		if pathSplit[len(pathSplit)-1] == packageKey {
+			impElm.Name = ast.NewIdent(packageKey)
+		}
+		impSpec = append(impSpec, &impElm)
 	}
 	return impSpec
 }
 
-// import declaration with token.IMPORT
-func Import(lPos *token.Pos, imports map[string]string) ast.Decl {
-	var (
-		impSpec []ast.Spec
-		lParen  = *lPos
-	)
-	*lPos++
-	impSpec = makeImportSpec(lPos, imports)
-	return &ast.GenDecl{
-		Lparen: lParen,
-		Tok:    token.IMPORT,
-		Specs:  impSpec,
-	}
-}
-
-// ast.CommentGroup. "nil" if arguments is omitted or empty
-func CommentGroup(comment ...string) *ast.CommentGroup {
-	if len(comment) == 0 {
+// CommentGroup wraps the lines in the ast.CommentGroup structure. Returns nil if arguments is omitted or empty
+func CommentGroup(comments ...string) *ast.CommentGroup {
+	if len(comments) == 0 {
 		return nil
 	} else {
-		if len(comment) == 1 && strings.TrimSpace(comment[0]) == "" {
+		if len(comments) == 1 && strings.TrimSpace(comments[0]) == "" {
 			return nil
 		}
 	}
-	return &ast.CommentGroup{
-		List: []*ast.Comment{
-			{
-				Slash: 1,
-				Text:  " /* " + strings.Join(comment, "\n") + " */\n",
-			},
-		},
+	var prefChar = "\n// "
+	var g ast.CommentGroup
+	for _, line := range comments {
+		g.List = append(g.List, &ast.Comment{Text: prefChar + line, Slash: 1})
+		prefChar = "// "
 	}
+	return &g
 }
 
 // ast.Field constructor.
@@ -127,8 +118,8 @@ func Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ..
 	if name != "" {
 		names = []*ast.Ident{ast.NewIdent(name)}
 	}
-	if len(docAndComments) > 0 {
-		doc = docAndComments[0]
+	if docAndComments = truncateEmpty(docAndComments); len(docAndComments) > 0 {
+		doc = fmt.Sprintf("%s %s", name, docAndComments[0])
 		comments = docAndComments[1:]
 	}
 	return &ast.Field{
@@ -153,23 +144,45 @@ func FieldList(fields ...*ast.Field) *ast.FieldList {
 	return &list
 }
 
-// creates ast.ValueSpec with Type field
-func VariableType(name string, varType ast.Expr) *ast.ValueSpec {
-	return &ast.ValueSpec{
-		Names: []*ast.Ident{
-			ast.NewIdent(name),
-		},
+// creates ast.TypeSpec with Type field
+func TypeSpec(name string, varType ast.Expr, comment ...string) *ast.TypeSpec {
+	return &ast.TypeSpec{
+		Name: ast.NewIdent(name),
 		Type: varType,
+		Doc:  CommentGroup(comment...),
 	}
 }
 
+// creates ast.ValueSpec with Type field
+func VariableType(name string, varType ast.Expr, vals ...VarValue) *ast.ValueSpec {
+	valSpec := ast.ValueSpec{
+		Names: []*ast.Ident{ast.NewIdent(name)},
+		Type:  varType,
+	}
+	for _, val := range vals {
+		valSpec.Values = append(valSpec.Values, val.Expr())
+	}
+	return &valSpec
+}
+
 // creates ast.ValueSpec with Values field
-func VariableValue(name string, varValue ast.Expr) *ast.ValueSpec {
-	return &ast.ValueSpec{
+func VariableValue(name string, vals ...VarValue) *ast.ValueSpec {
+	valSpec := ast.ValueSpec{
 		Names: []*ast.Ident{
 			ast.NewIdent(name),
 		},
-		Values: []ast.Expr{varValue},
+		Values: []ast.Expr{},
+	}
+	for _, val := range vals {
+		valSpec.Values = append(valSpec.Values, val.Expr())
+	}
+	return &valSpec
+}
+
+// creates ast.TypeSpec with Type field
+func StructType(fields ...*ast.Field) *ast.StructType {
+	return &ast.StructType{
+		Fields: FieldList(fields...),
 	}
 }
 
@@ -217,4 +230,15 @@ func Assign(varNames VarNames, tok assignToken, rhs ...ast.Expr) ast.Stmt {
 		Tok: tok.token(),
 		Rhs: rhs,
 	}
+}
+
+// todo move
+func truncateEmpty(s []string) []string {
+	var result []string
+	for i := range s {
+		if line := strings.TrimSpace(s[i]); len(result) > 0 || line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
 }
