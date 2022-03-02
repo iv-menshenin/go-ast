@@ -47,11 +47,17 @@ var (
 	// Float64 represents the data type float64
 	Float64 = ast.NewIdent("float64")
 
+	// Bool represents the data type bool
+	Bool = ast.NewIdent("bool")
+
 	// String represents the data type string
 	String = ast.NewIdent("string")
 
 	// ContextType represents the `context.Context` interface
 	ContextType = SimpleSelector("context", "Context")
+
+	// TimeTime represents the `time.Time` struct
+	TimeTime = SimpleSelector("time", "Time")
 
 	// ErrorType represents the `error` interface
 	ErrorType = ast.NewIdent("error")
