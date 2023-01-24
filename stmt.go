@@ -1,11 +1,11 @@
-package builders
+package asthlp
 
 import (
 	"go/ast"
 	"go/token"
 )
 
-// creates ast.DeclStmt with VAR token, nil values will be excluded from List
+// Var creates ast.DeclStmt with VAR token, nil values will be excluded from List
 func Var(spec ...ast.Spec) ast.Stmt {
 	var decl = ast.GenDecl{
 		Tok:   token.VAR,
@@ -21,7 +21,9 @@ func Var(spec ...ast.Spec) ast.Stmt {
 	}
 }
 
-// return a, b, c, ... , nil values will be excluded
+// Return represents return statement
+//   return a, b, c, ...
+// nil values will be excluded
 func Return(results ...ast.Expr) *ast.ReturnStmt {
 	var ret = ast.ReturnStmt{
 		Results: make([]ast.Expr, 0, len(results)),
@@ -34,12 +36,17 @@ func Return(results ...ast.Expr) *ast.ReturnStmt {
 	return &ret
 }
 
-// return
+// ReturnEmpty represents empty return statement
+//   return
 func ReturnEmpty() ast.Stmt {
 	return Return()
 }
 
-// { ... }, nil values will be excluded from List
+// Block represents block of statement
+//   {
+//      ... // statements
+//   }
+// nil values will be excluded from List
 func Block(statements ...ast.Stmt) *ast.BlockStmt {
 	var block = ast.BlockStmt{
 		List: make([]ast.Stmt, 0, len(statements)),
@@ -52,7 +59,9 @@ func Block(statements ...ast.Stmt) *ast.BlockStmt {
 	return &block
 }
 
-// if <condition> { <body> }, nil values will be excluded from Body.List
+// If represents `if` statement
+//   if <condition> { <body> }
+// nil values will be excluded from Body.List
 func If(condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 	return &ast.IfStmt{
 		If:   1,
@@ -61,7 +70,21 @@ func If(condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 	}
 }
 
-// if <init>; <condition> { <body> }, nil values will be excluded from Body.List
+// IfElse represents `if` statement
+//   if <condition> { <body> } else { <alternative> }
+// nil values will be excluded from Body.List
+func IfElse(condition ast.Expr, body *ast.BlockStmt, alternative *ast.BlockStmt) ast.Stmt {
+	return &ast.IfStmt{
+		If:   1,
+		Cond: condition,
+		Body: body,
+		Else: alternative,
+	}
+}
+
+// IfInit represents `if` statement with initialization
+//   if <init>; <condition> { <body> }
+// nil values will be excluded from Body.List
 func IfInit(initiation ast.Stmt, condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 	return &ast.IfStmt{
 		If:   1,
@@ -71,7 +94,9 @@ func IfInit(initiation ast.Stmt, condition ast.Expr, body ...ast.Stmt) ast.Stmt 
 	}
 }
 
-// for <key>, <value> := range <x> { <body> } ":=" replaced by "=" if define is FALSE
+// Range represents `for` statement with range expression
+//   for <key>, <value> := range <x> { <body> }
+// ":=" replaced by "=" if define is FALSE
 func Range(define bool, key, value string, x ast.Expr, body ...ast.Stmt) ast.Stmt {
 	var (
 		tok           = token.ASSIGN
@@ -95,4 +120,8 @@ func Range(define bool, key, value string, x ast.Expr, body ...ast.Stmt) ast.Stm
 		X:      x,
 		Body:   Block(body...),
 	}
+}
+
+func EmptyStmt() ast.Stmt {
+	return &ast.EmptyStmt{}
 }

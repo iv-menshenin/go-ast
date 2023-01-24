@@ -1,4 +1,4 @@
-package builders
+package asthlp
 
 import (
 	"fmt"
@@ -8,16 +8,26 @@ import (
 )
 
 var (
+	// False equals false
+	False = BoolConstant(false).Expr()
+	// True equals true
+	True = BoolConstant(true).Expr()
+
 	// Zero equals 0 constant
 	Zero = IntegerConstant(0).Expr()
+	// EmptyString equals ""
+	EmptyString = StringConstant("").Expr()
 	// Blank equals _ ident
 	Blank = ast.NewIdent("_")
 	// Nil equals nil ident
 	Nil = ast.NewIdent("nil")
 	// EmptyInterface equals empty interface
 	EmptyInterface = &ast.InterfaceType{
-		Methods:    &ast.FieldList{},
-		Incomplete: true, // todo ? check it
+		Methods: &ast.FieldList{
+			Opening: 1,
+			List:    nil,
+			Closing: 1,
+		},
 	}
 
 	// UInt represents the data type uint
@@ -53,6 +63,15 @@ var (
 	// String represents the data type string
 	String = ast.NewIdent("string")
 
+	// Byte represents the data type byte
+	Byte = ast.NewIdent("byte")
+
+	// Rune represents the data type rune
+	Rune = ast.NewIdent("rune")
+
+	// UUID represents the `uuid.UUID` data type
+	UUID = SimpleSelector("uuid", "UUID")
+
 	// ContextType represents the `context.Context` interface
 	ContextType = SimpleSelector("context", "Context")
 
@@ -62,6 +81,11 @@ var (
 	// ErrorType represents the `error` interface
 	ErrorType = ast.NewIdent("error")
 )
+
+// NewIdent creates new ast.Ident
+func NewIdent(name string) *ast.Ident {
+	return ast.NewIdent(name)
+}
 
 // Import represents import declaration with token.IMPORT
 func Import(imports map[string]string) ast.Decl {
@@ -110,8 +134,46 @@ func CommentGroup(comments ...string) *ast.CommentGroup {
 	return &g
 }
 
-// ast.Field constructor.
-// docAndComments contains the first line as Docstring, all other lines turn into CommentGroup
+// CommentGroupIf wraps the lines in the ast.CommentGroup structure if there is
+func CommentGroupIf(comments ...*string) *ast.CommentGroup {
+	var s = make([]string, len(comments))
+	for i, comment := range comments {
+		if comment != nil {
+			s[i] = *comment
+		}
+	}
+	return CommentGroup(s...)
+}
+
+func StructTypeFiller(name string, comment ...string) StructFieldFiller {
+	return &structTypeFiller{
+		name: name,
+		comm: comment,
+	}
+}
+
+type (
+	StructFieldFiller interface {
+		Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ...string)
+		TypeSpec() *ast.TypeSpec
+	}
+	structTypeFiller struct {
+		name string
+		comm []string
+		flds []*ast.Field
+	}
+)
+
+func (s *structTypeFiller) Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ...string) {
+	s.flds = append(s.flds, Field(name, tag, fieldType, docAndComments...))
+}
+
+func (s *structTypeFiller) TypeSpec() *ast.TypeSpec {
+	return TypeSpec(s.name, &ast.StructType{Fields: FieldList(s.flds...)}, s.comm...)
+}
+
+// Field creates ast.Field.
+// Parameter docAndComments contains the first line as Docstring, all other lines turn into CommentGroup
 func Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ...string) *ast.Field {
 	if fieldType == nil {
 		return nil
@@ -137,7 +199,7 @@ func Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ..
 	}
 }
 
-// creates ast.FieldList, any nil values will be excluded from list
+// FieldList creates ast.FieldList, any nil values will be excluded from list
 func FieldList(fields ...*ast.Field) *ast.FieldList {
 	var list = ast.FieldList{
 		List: make([]*ast.Field, 0, len(fields)),
@@ -150,7 +212,7 @@ func FieldList(fields ...*ast.Field) *ast.FieldList {
 	return &list
 }
 
-// creates ast.TypeSpec with Type field
+// TypeSpec creates ast.TypeSpec with Type field
 func TypeSpec(name string, varType ast.Expr, comment ...string) *ast.TypeSpec {
 	return &ast.TypeSpec{
 		Name: ast.NewIdent(name),
@@ -159,8 +221,8 @@ func TypeSpec(name string, varType ast.Expr, comment ...string) *ast.TypeSpec {
 	}
 }
 
-// creates ast.ValueSpec with Type field
-func VariableType(name string, varType ast.Expr, vals ...VarValue) *ast.ValueSpec {
+// VariableType creates ast.ValueSpec with Type field
+func VariableType(name string, varType ast.Expr, vals ...Expression) *ast.ValueSpec {
 	valSpec := ast.ValueSpec{
 		Names: []*ast.Ident{ast.NewIdent(name)},
 		Type:  varType,
@@ -171,8 +233,8 @@ func VariableType(name string, varType ast.Expr, vals ...VarValue) *ast.ValueSpe
 	return &valSpec
 }
 
-// creates ast.ValueSpec with Values field
-func VariableValue(name string, vals ...VarValue) *ast.ValueSpec {
+// VariableValue creates ast.ValueSpec with Values field
+func VariableValue(name string, vals ...Expression) *ast.ValueSpec {
 	valSpec := ast.ValueSpec{
 		Names: []*ast.Ident{
 			ast.NewIdent(name),
@@ -185,10 +247,18 @@ func VariableValue(name string, vals ...VarValue) *ast.ValueSpec {
 	return &valSpec
 }
 
-// creates ast.TypeSpec with Type field
+// StructType creates ast.StructType with Type field
 func StructType(fields ...*ast.Field) *ast.StructType {
 	return &ast.StructType{
 		Fields: FieldList(fields...),
+	}
+}
+
+// KeyValueExpr creates ast.KeyValueExpr with given key and value
+func KeyValueExpr(key string, val ast.Expr) *ast.KeyValueExpr {
+	return &ast.KeyValueExpr{
+		Key:   ast.NewIdent(key),
+		Value: val,
 	}
 }
 
@@ -217,19 +287,15 @@ func (t assignToken) token() token.Token {
 }
 
 type (
-	// represents a list of variable names
-	VarNames []string
+	// VarNames represents a list of variable names
+	VarNames []ast.Expr
 )
 
 func (c VarNames) expression() []ast.Expr {
-	var varNames = make([]ast.Expr, 0, len(c))
-	for _, varName := range c {
-		varNames = append(varNames, ast.NewIdent(varName))
-	}
-	return varNames
+	return c
 }
 
-// creates ast.AssignStmt which assigns a variable with a value
+// Assign creates ast.AssignStmt which assigns a variable with a value
 func Assign(varNames VarNames, tok assignToken, rhs ...ast.Expr) ast.Stmt {
 	return &ast.AssignStmt{
 		Lhs: varNames.expression(),

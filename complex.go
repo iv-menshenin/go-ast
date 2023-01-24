@@ -1,4 +1,4 @@
-package builders
+package asthlp
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// with tags like map[tag]values, string `tag1:"values1" tag2:"values2"` is created
+// MakeTagsForField with tags like map[tag]values, string `tag1:"values1" tag2:"values2"` is created
 func MakeTagsForField(tags map[string][]string) *ast.BasicLit {
 	if len(tags) == 0 {
 		return nil
@@ -27,7 +27,10 @@ func MakeTagsForField(tags map[string][]string) *ast.BasicLit {
 	}
 }
 
-// if <varName>, err = callExpr(); err != nil { <body> }
+// MakeCallWithErrChecking creates a function call statement with error checking branch
+//   if <varName>, err = callExpr(); err != nil {
+//       <body>
+//   }
 //
 // varName can be omitted
 func MakeCallWithErrChecking(varName string, callExpr *ast.CallExpr, body ...ast.Stmt) ast.Stmt {
@@ -49,30 +52,61 @@ func MakeCallWithErrChecking(varName string, callExpr *ast.CallExpr, body ...ast
 	}
 }
 
-// if <varName>, err = callExpr(); err != nil { return err }
+// MakeCallReturnIfError creates a function call statement with error checking branch contained `return err`
+//   if <varName>, err = callExpr(); err != nil {
+//       return err
+//   }
 //
 // varName can be omitted
-func MakeCallReturnIfError(varName string, callExpr *ast.CallExpr) ast.Stmt {
-	if varName != "" {
+func MakeCallReturnIfError(varName ast.Expr, callExpr *ast.CallExpr) ast.Stmt {
+	var errVar = ast.NewIdent("err")
+	if varName != nil {
 		return IfInit(
-			Assign(MakeVarNames(varName, "err"), Assignment, callExpr),
-			NotEqual(ast.NewIdent("err"), Nil),
-			Return(ast.NewIdent("err")),
+			Assign(VarNames{varName, errVar}, Assignment, callExpr),
+			NotEqual(errVar, Nil),
+			Return(errVar),
 		)
 	} else {
 		return IfInit(
-			Assign(MakeVarNames("err"), Assignment, callExpr),
-			NotEqual(ast.NewIdent("err"), Nil),
-			Return(ast.NewIdent("err")),
+			Assign(VarNames{errVar}, Assignment, callExpr),
+			NotEqual(errVar, Nil),
+			Return(errVar),
 		)
 	}
 }
 
-// len(<arrayName>) > 0
-func MakeLenGreatThanZero(arrayName string) ast.Expr {
-	return &ast.BinaryExpr{
-		X:  Call(LengthFn, ast.NewIdent(arrayName)),
-		Op: token.GTR,
-		Y:  Zero,
+type (
+	SwitchCase struct {
+		clause []ast.Expr
+		body   []ast.Stmt
 	}
+)
+
+func MakeTypeSwitch(assign ast.Stmt, cases ...SwitchCase) ast.Stmt {
+	return &ast.TypeSwitchStmt{
+		Assign: assign,
+		Body:   &ast.BlockStmt{List: casesToStatements(cases)},
+	}
+}
+
+func MakeSwitchCase(clause ...ast.Expr) SwitchCase {
+	return SwitchCase{
+		clause: clause,
+	}
+}
+
+func (c SwitchCase) Body(statements ...ast.Stmt) SwitchCase {
+	c.body = statements
+	return c
+}
+
+func casesToStatements(cases []SwitchCase) []ast.Stmt {
+	var result = make([]ast.Stmt, 0, len(cases))
+	for _, oneCase := range cases {
+		result = append(result, &ast.CaseClause{
+			List: oneCase.clause,
+			Body: oneCase.body,
+		})
+	}
+	return result
 }

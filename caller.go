@@ -1,4 +1,4 @@
-package builders
+package asthlp
 
 import (
 	"go/ast"
@@ -28,6 +28,24 @@ var (
 
 	// StrconvItoaFn is a construction of the `strconv.Itoa` function
 	StrconvItoaFn = makeFunc(SimpleSelector("strconv", "Itoa"), 1, false)
+	// StrconvAtoiFn is a construction of the `strconv.Atoi` function
+	StrconvAtoiFn = makeFunc(SimpleSelector("strconv", "Atoi"), 1, false)
+	// StrconvParseIntFn is a construction of the `strconv.ParseInt` function
+	StrconvParseIntFn = makeFunc(SimpleSelector("strconv", "ParseInt"), 3, false)
+	// StrconvParseUintFn is a construction of the `strconv.ParseUint` function
+	StrconvParseUintFn = makeFunc(SimpleSelector("strconv", "ParseUint"), 3, false)
+	// StrconvParseFloatFn is a construction of the `strconv.ParseFloat` function
+	StrconvParseFloatFn = makeFunc(SimpleSelector("strconv", "ParseFloat"), 2, false)
+	// StrconvParseBoolFn is a construction of the `strconv.ParseBool` function
+	StrconvParseBoolFn = makeFunc(SimpleSelector("strconv", "ParseBool"), 1, false)
+
+	// StrconvFormatIntFn is a construction of the `strconv.FormatInt` function
+	StrconvFormatIntFn = makeFunc(SimpleSelector("strconv", "FormatInt"), 2, false)
+	// StrconvFormatFloatFn is a construction of the `strconv.FormatFloat` function
+	StrconvFormatFloatFn = makeFunc(SimpleSelector("strconv", "FormatFloat"), 4, false)
+	// StrconvFormatBoolFn is a construction of the `strconv.FormatBool` function
+	StrconvFormatBoolFn = makeFunc(SimpleSelector("strconv", "FormatBool"), 1, false)
+
 	// StringsEqualFoldFn is a construction of the `strings.EqualFold` function
 	StringsEqualFoldFn = makeFunc(SimpleSelector("strings", "EqualFold"), 2, false)
 	// StringsToLowerFn is a construction of the `strings.ToLower` function
@@ -35,15 +53,24 @@ var (
 	// StringsJoinFn is a construction of the `strings.Join` function
 	StringsJoinFn = makeFunc(SimpleSelector("strings", "Join"), 2, false)
 
+	// BytesEqualFoldFn is a construction of the `bytes.EqualFold` function
+	BytesEqualFoldFn = makeFunc(SimpleSelector("bytes", "EqualFold"), 2, false)
+
 	// FmtSprintfFn is a construction of the `fmt.Sprintf` function
 	FmtSprintfFn = makeFunc(SimpleSelector("fmt", "Sprintf"), 1, true)
 	// FmtFscanfFn is a construction of the `fmt.Fscanf` function
 	FmtFscanfFn = makeFunc(SimpleSelector("fmt", "Fscanf"), 1, true)
+	// FmtErrorfFn is a construction of the `fmt.Errorf` function
+	FmtErrorfFn = makeFunc(SimpleSelector("fmt", "Errorf"), 1, true)
 
 	// JsonUnmarshal is a construction of the `json.Unmarshall` function
 	JsonUnmarshal = makeFunc(SimpleSelector("json", "Unmarshal"), 2, false)
 	// JsonMarshal is a construction of the `json.Marshall` function
 	JsonMarshal = makeFunc(SimpleSelector("json", "Marshal"), 1, false)
+	// JsonNewEncoder is a construction of the `json.NewEncoder` function
+	JsonNewEncoder = makeFunc(SimpleSelector("json", "NewEncoder"), 1, false)
+	// JsonNewDecoder is a construction of the `json.NewDecoder` function
+	JsonNewDecoder = makeFunc(SimpleSelector("json", "NewDecoder"), 1, false)
 
 	// TimeNowFn is a construction of the `time.Now` function
 	TimeNowFn = makeFunc(SimpleSelector("time", "Now"), 0, false)
@@ -56,6 +83,17 @@ var (
 	RowsErrFn = makeFunc(SimpleSelector("rows", "Err"), 0, false)
 	// RowsScanFn is a construction of the `rows.Scan` function
 	RowsScanFn = makeFunc(SimpleSelector("rows", "Scan"), 1, true)
+
+	// BytesToIntFn represents utils.BytesToInt function
+	BytesToIntFn = makeFunc(SimpleSelector("utils", "BytesToInt"), 1, false)
+	// BytesToUintFn represents utils.BytesToUint function
+	BytesToUintFn = makeFunc(SimpleSelector("utils", "BytesToUint"), 1, false)
+	// BytesToInt64Fn represents utils.BytesToInt64 function
+	BytesToInt64Fn = makeFunc(SimpleSelector("utils", "BytesToInt64"), 1, false)
+	// BytesToUint64Fn represents utils.BytesToUint64 function
+	BytesToUint64Fn = makeFunc(SimpleSelector("utils", "BytesToUint64"), 1, false)
+	// BytesToFloat64Fn represents utils.BytesToFloat64 function
+	BytesToFloat64Fn = makeFunc(SimpleSelector("utils", "BytesToFloat64"), 1, false)
 )
 
 func makeFunc(f ast.Expr, m int, e bool) CallFunctionDescriber {
@@ -63,6 +101,14 @@ func makeFunc(f ast.Expr, m int, e bool) CallFunctionDescriber {
 		FunctionName:                f,
 		MinimumNumberOfArguments:    m,
 		ExtensibleNumberOfArguments: e,
+	}
+}
+
+func InlineFunc(f ast.Expr) CallFunctionDescriber {
+	return CallFunctionDescriber{
+		FunctionName:                f,
+		MinimumNumberOfArguments:    0,
+		ExtensibleNumberOfArguments: true,
 	}
 }
 
@@ -104,4 +150,8 @@ func CallEllipsis(fn CallFunctionDescriber, args ...ast.Expr) *ast.CallExpr {
 		Args:     args,
 		Ellipsis: 1,
 	}
+}
+
+func CallStmt(x *ast.CallExpr) ast.Stmt {
+	return &ast.ExprStmt{X: x}
 }
