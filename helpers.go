@@ -35,3 +35,10 @@ func IfKeyVal(key string, value ast.Expr) ast.Expr {
 		Value: value,
 	}
 }
+
+func safeExpr(expression Expression) ast.Expr {
+	if expression == nil {
+		return nil
+	}
+	return expression.Expr()
+}

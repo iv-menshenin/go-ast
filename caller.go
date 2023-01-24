@@ -55,6 +55,10 @@ var (
 
 	// BytesEqualFoldFn is a construction of the `bytes.EqualFold` function
 	BytesEqualFoldFn = makeFunc(SimpleSelector("bytes", "EqualFold"), 2, false)
+	// BytesEqualFn is a construction of the `bytes.EqualFold` function
+	BytesEqualFn = makeFunc(SimpleSelector("bytes", "Equal"), 2, false)
+	// BytesNewBufferFn is a construction of the `bytes.NewBuffer` function
+	BytesNewBufferFn = makeFunc(SimpleSelector("bytes", "NewBuffer"), 1, false)
 
 	// FmtSprintfFn is a construction of the `fmt.Sprintf` function
 	FmtSprintfFn = makeFunc(SimpleSelector("fmt", "Sprintf"), 1, true)

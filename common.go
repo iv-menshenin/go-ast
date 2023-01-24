@@ -134,6 +134,10 @@ func CommentGroup(comments ...string) *ast.CommentGroup {
 	return &g
 }
 
+func CommentStmt(comment string) ast.Stmt {
+	return &ast.ExprStmt{X: &ast.BasicLit{Kind: token.COMMENT, Value: "// " + comment}}
+}
+
 // CommentGroupIf wraps the lines in the ast.CommentGroup structure if there is
 func CommentGroupIf(comments ...*string) *ast.CommentGroup {
 	var s = make([]string, len(comments))

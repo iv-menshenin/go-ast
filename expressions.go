@@ -22,6 +22,7 @@ type (
 	IntegerConstant  int64   // integer constant e.g. 123
 	UnsignedConstant uint64  // unsigned integer constant e.g. 123
 	FloatConstant    float64 // float constant e.g. 123.45
+	SliceByteLiteral []byte  // []byte{'f', 'i', 'l', 't', 'e', 'r'}
 	VariableName     string  // any variable name
 	freeExpression   struct {
 		expr ast.Expr
@@ -87,6 +88,26 @@ func (c FloatConstant) Expr() ast.Expr {
 	}
 }
 
+func (s SliceByteLiteral) Expr() ast.Expr {
+	var elts []ast.Expr
+	for _, char := range s {
+		var val = "'" + string(char) + "'"
+		var kind = token.CHAR
+		if char < 32 {
+			val = strconv.Itoa(int(char))
+			kind = token.INT
+		}
+		elts = append(elts, &ast.BasicLit{
+			Kind:  kind,
+			Value: val,
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: Byte},
+		Elts: elts,
+	}
+}
+
 // Expr creates ast.Ident with variable name
 func (c VariableName) Expr() ast.Expr {
 	return ast.NewIdent(string(c))
@@ -129,7 +150,7 @@ func Index(x ast.Expr, index Expression) ast.Expr {
 	return &ast.IndexExpr{
 		X:      x,
 		Lbrack: 1,
-		Index:  index.Expr(),
+		Index:  safeExpr(index),
 		Rbrack: 2,
 	}
 }
@@ -362,5 +383,13 @@ func MakeLenGreatThanZero(arrayName string) ast.Expr {
 		X:  Call(LengthFn, ast.NewIdent(arrayName)),
 		Op: token.GTR,
 		Y:  Zero,
+	}
+}
+
+func Slice(varName string, lo, hi Expression) ast.Expr {
+	return &ast.SliceExpr{
+		X:    ast.NewIdent(varName),
+		High: safeExpr(hi),
+		Low:  safeExpr(lo),
 	}
 }

@@ -125,3 +125,17 @@ func Range(define bool, key, value string, x ast.Expr, body ...ast.Stmt) ast.Stm
 func EmptyStmt() ast.Stmt {
 	return &ast.EmptyStmt{}
 }
+
+func Increment(expr ast.Expr) ast.Stmt {
+	return &ast.IncDecStmt{
+		Tok: token.INC,
+		X:   expr,
+	}
+}
+
+func Decrement(expr ast.Expr) ast.Stmt {
+	return &ast.IncDecStmt{
+		Tok: token.DEC,
+		X:   expr,
+	}
+}
