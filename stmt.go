@@ -94,6 +94,22 @@ func IfInit(initiation ast.Stmt, condition ast.Expr, body ...ast.Stmt) ast.Stmt 
 	}
 }
 
+// IfInitElse represents `if` statement with initialization and with else block
+//   if <init>; <condition> { <body> } else { <alternative> }
+// nil values will be excluded from Body.List
+func IfInitElse(initiation ast.Stmt, condition ast.Expr, body *ast.BlockStmt, alternative *ast.BlockStmt) ast.Stmt {
+	if alternative == nil {
+		return IfInit(initiation, condition, body.List...)
+	}
+	return &ast.IfStmt{
+		If:   1,
+		Init: initiation,
+		Cond: condition,
+		Body: body,
+		Else: alternative,
+	}
+}
+
 // Range represents `for` statement with range expression
 //   for <key>, <value> := range <x> { <body> }
 // ":=" replaced by "=" if define is FALSE
