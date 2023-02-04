@@ -134,6 +134,16 @@ func CommentGroup(comments ...string) *ast.CommentGroup {
 	return &g
 }
 
+// CommentGroupWithTag wraps the lines in the ast.CommentGroup structure. Returns nil if arguments is omitted or empty.
+// Appends the contents of the tag attribute as the last line without spaces between the slashes and its contents.
+func CommentGroupWithTag(tag string, comments ...string) *ast.CommentGroup {
+	g := CommentGroup(comments...)
+	if tag != "" {
+		g.List = append(g.List, &ast.Comment{Text: "//" + tag, Slash: 1})
+	}
+	return g
+}
+
 func CommentStmt(comment string) ast.Stmt {
 	return &ast.ExprStmt{X: &ast.BasicLit{Kind: token.COMMENT, Value: "// " + comment}}
 }
