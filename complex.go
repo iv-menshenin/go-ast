@@ -28,9 +28,10 @@ func MakeTagsForField(tags map[string][]string) *ast.BasicLit {
 }
 
 // MakeCallWithErrChecking creates a function call statement with error checking branch
-//   if <varName>, err = callExpr(); err != nil {
-//       <body>
-//   }
+//
+//	if <varName>, err = callExpr(); err != nil {
+//	    <body>
+//	}
 //
 // varName can be omitted
 func MakeCallWithErrChecking(varName string, callExpr *ast.CallExpr, body ...ast.Stmt) ast.Stmt {
@@ -53,9 +54,10 @@ func MakeCallWithErrChecking(varName string, callExpr *ast.CallExpr, body ...ast
 }
 
 // MakeCallReturnIfError creates a function call statement with error checking branch contained `return err`
-//   if <varName>, err = callExpr(); err != nil {
-//       return err
-//   }
+//
+//	if <varName>, err = callExpr(); err != nil {
+//	    return err
+//	}
 //
 // varName can be omitted
 func MakeCallReturnIfError(varName ast.Expr, callExpr *ast.CallExpr) ast.Stmt {
@@ -75,19 +77,27 @@ func MakeCallReturnIfError(varName ast.Expr, callExpr *ast.CallExpr) ast.Stmt {
 	}
 }
 
-type (
-	SwitchCase struct {
-		clause []ast.Expr
-		body   []ast.Stmt
-	}
-)
-
 func MakeTypeSwitch(assign ast.Stmt, cases ...SwitchCase) ast.Stmt {
 	return &ast.TypeSwitchStmt{
 		Assign: assign,
 		Body:   &ast.BlockStmt{List: casesToStatements(cases)},
 	}
 }
+
+func MakeSwitch(init ast.Stmt, tag ast.Expr, cases ...SwitchCase) ast.Stmt {
+	return &ast.SwitchStmt{
+		Init: init,
+		Tag:  tag,
+		Body: &ast.BlockStmt{List: casesToStatements(cases)},
+	}
+}
+
+type (
+	SwitchCase struct {
+		clause []ast.Expr
+		body   []ast.Stmt
+	}
+)
 
 func MakeSwitchCase(clause ...ast.Expr) SwitchCase {
 	return SwitchCase{
