@@ -17,6 +17,8 @@ type (
 )
 
 var (
+	// NewFn is a construction of the `new` function
+	NewFn = makeFunc(ast.NewIdent("new"), 1, true)
 	// MakeFn is a construction of the `make` function
 	MakeFn = makeFunc(ast.NewIdent("make"), 1, true)
 	// LengthFn is a construction of the `len` function

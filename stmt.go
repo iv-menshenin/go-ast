@@ -155,3 +155,15 @@ func Decrement(expr ast.Expr) ast.Stmt {
 		X:   expr,
 	}
 }
+
+func Continue() ast.Stmt {
+	return &ast.BranchStmt{Tok: token.CONTINUE}
+}
+
+func Break() ast.Stmt {
+	return &ast.BranchStmt{Tok: token.BREAK}
+}
+
+func Fallthrough() ast.Stmt {
+	return &ast.BranchStmt{Tok: token.FALLTHROUGH}
+}
