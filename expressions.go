@@ -393,3 +393,11 @@ func Slice(varName string, lo, hi Expression) ast.Expr {
 		Low:  safeExpr(lo),
 	}
 }
+
+func SliceExpr(x ast.Expr, lo, hi Expression) ast.Expr {
+	return &ast.SliceExpr{
+		X:    x,
+		High: safeExpr(hi),
+		Low:  safeExpr(lo),
+	}
+}
