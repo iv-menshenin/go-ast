@@ -328,3 +328,7 @@ func truncateEmpty(s []string) []string {
 	}
 	return result
 }
+
+func ParenExpr(x ast.Expr) ast.Expr {
+	return &ast.ParenExpr{X: x}
+}
