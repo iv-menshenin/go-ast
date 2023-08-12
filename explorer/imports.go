@@ -5,11 +5,16 @@ import (
 	"go/ast"
 	"go/token"
 	"sort"
+	"strings"
 )
 
 type (
 	Discoverer struct {
-		imports map[string]Package
+		imports map[string]UsedPackage
+	}
+	UsedPackage struct {
+		Package Package
+		Alias   string
 	}
 	Package struct {
 		Path string
@@ -82,7 +87,7 @@ func RegisterPackage(packName string, pkg Package) {
 
 func New() *Discoverer {
 	return &Discoverer{
-		imports: make(map[string]Package),
+		imports: make(map[string]UsedPackage),
 	}
 }
 
@@ -101,21 +106,24 @@ func (i *Discoverer) Visit(node ast.Node) (w ast.Visitor) {
 	}
 	pack, ok := knownPackages[x.String()]
 	if ok {
-		i.imports[pack.Path] = pack
+		i.imports[pack.Path] = UsedPackage{
+			Package: pack,
+			Alias:   x.String(),
+		}
 	}
 	return i
 }
 
 func (i *Discoverer) ImportSpec() []ast.Spec {
-	var imports []Package
+	var imports []UsedPackage
 	for _, pkg := range i.imports {
 		imports = append(imports, pkg)
 	}
 	sort.SliceStable(imports, func(i, j int) bool {
-		if imports[i].Kind == imports[j].Kind {
-			return imports[i].Path < imports[j].Path
+		if imports[i].Package.Kind == imports[j].Package.Kind {
+			return imports[i].Package.Path < imports[j].Package.Path
 		}
-		return imports[i].Kind < imports[j].Kind
+		return imports[i].Package.Kind < imports[j].Package.Kind
 	})
 
 	var (
@@ -124,13 +132,18 @@ func (i *Discoverer) ImportSpec() []ast.Spec {
 	)
 	for _, imp := range imports {
 		var addLine string
-		if currT != imp.Kind {
-			currT = imp.Kind
+		var alias string
+		split := strings.Split(imp.Package.Path, "/")
+		if split[len(split)-1] != imp.Alias {
+			alias = imp.Alias + " "
+		}
+		if currT != imp.Package.Kind {
+			currT = imp.Package.Kind
 			addLine = "\n\t"
 		}
 		specs = append(specs, &ast.ImportSpec{Path: &ast.BasicLit{
 			Kind:  token.STRING,
-			Value: fmt.Sprintf("%s\"%s\"", addLine, imp.Path),
+			Value: fmt.Sprintf("%s%s\"%s\"", addLine, alias, imp.Package.Path),
 		}})
 	}
 	return specs
