@@ -186,6 +186,38 @@ func (s *structTypeFiller) TypeSpec() *ast.TypeSpec {
 	return TypeSpec(s.name, &ast.StructType{Fields: FieldList(s.flds...)}, s.comm...)
 }
 
+func InterfaceTypeFiller(name string, comment ...string) InterfaceMethodFiller {
+	return &interfaceTypeFiller{
+		name: name,
+		comm: comment,
+	}
+}
+
+type (
+	InterfaceMethodFiller interface {
+		Inherits(name string, tag *ast.BasicLit, docAndComments ...string)
+		Method(decl MethodDecl, tag *ast.BasicLit, docAndComments ...string)
+		TypeSpec() *ast.TypeSpec
+	}
+	interfaceTypeFiller struct {
+		name string
+		comm []string
+		flds []*ast.Field
+	}
+)
+
+func (s *interfaceTypeFiller) Inherits(name string, tag *ast.BasicLit, docAndComments ...string) {
+	s.flds = append(s.flds, Field(name, tag, nil, docAndComments...))
+}
+
+func (s *interfaceTypeFiller) Method(decl MethodDecl, tag *ast.BasicLit, docAndComments ...string) {
+	s.flds = append(s.flds, Field(decl.Name().Name, tag, decl.Type(), docAndComments...))
+}
+
+func (s *interfaceTypeFiller) TypeSpec() *ast.TypeSpec {
+	return TypeSpec(s.name, &ast.InterfaceType{Methods: FieldList(s.flds...)}, s.comm...)
+}
+
 // Field creates ast.Field.
 // Parameter docAndComments contains the first line as Docstring, all other lines turn into CommentGroup
 func Field(name string, tag *ast.BasicLit, fieldType ast.Expr, docAndComments ...string) *ast.Field {

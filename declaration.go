@@ -6,14 +6,6 @@ import (
 )
 
 type (
-	funcDecl struct {
-		name *ast.Ident
-		comm []*ast.Comment
-		recv *ast.Field
-		parm *ast.FieldList
-		resl *ast.FieldList
-		stmt []ast.Stmt
-	}
 	FuncDecl interface {
 		Comments(...string) FuncDecl
 		Receiver(*ast.Field) FuncDecl
@@ -23,12 +15,27 @@ type (
 		Decl() ast.Decl
 		Lit() ast.Expr
 	}
+	MethodDecl interface {
+		Params(...*ast.Field) MethodDecl
+		Results(...*ast.Field) MethodDecl
+		Type() ast.Expr
+		Name() *ast.Ident
+	}
 )
 
 func DeclareFunction(name *ast.Ident) FuncDecl {
 	return &funcDecl{
 		name: name,
 	}
+}
+
+type funcDecl struct {
+	name *ast.Ident
+	comm []*ast.Comment
+	recv *ast.Field
+	parm *ast.FieldList
+	resl *ast.FieldList
+	stmt []ast.Stmt
 }
 
 func (f *funcDecl) Comments(comments ...string) FuncDecl {
@@ -92,6 +99,45 @@ func (f *funcDecl) Lit() ast.Expr {
 		},
 		Body: &ast.BlockStmt{List: f.stmt},
 	}
+}
+
+func DeclareMethod(name *ast.Ident) MethodDecl {
+	return &methodDecl{
+		name: name,
+	}
+}
+
+type methodDecl struct {
+	name *ast.Ident
+	parm *ast.FieldList
+	resl *ast.FieldList
+}
+
+func (f *methodDecl) Params(params ...*ast.Field) MethodDecl {
+	if f.parm == nil {
+		f.parm = &ast.FieldList{}
+	}
+	f.parm.List = append(f.parm.List, params...)
+	return f
+}
+
+func (f *methodDecl) Results(results ...*ast.Field) MethodDecl {
+	if f.resl == nil {
+		f.resl = &ast.FieldList{}
+	}
+	f.resl.List = append(f.resl.List, results...)
+	return f
+}
+
+func (f *methodDecl) Type() ast.Expr {
+	return &ast.FuncType{
+		Params:  f.parm,
+		Results: f.resl,
+	}
+}
+
+func (f *methodDecl) Name() *ast.Ident {
+	return f.name
 }
 
 type (
