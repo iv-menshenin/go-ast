@@ -5,7 +5,7 @@ import (
 	"go/token"
 )
 
-// Var creates ast.DeclStmt with VAR token, nil values will be excluded from List
+// Var creates ast.DeclStmt with VAR token, nil values will be excluded from List. Use VariableType to fill it in.
 func Var(spec ...ast.Spec) ast.Stmt {
 	var decl = ast.GenDecl{
 		Tok:   token.VAR,
@@ -13,7 +13,7 @@ func Var(spec ...ast.Spec) ast.Stmt {
 	}
 	for i, s := range spec {
 		if s != nil {
-			decl.Specs = append(decl.Specs, spec[i])
+			decl.Specs = append(decl.Specs, varSpecDependOnCount(spec[i], len(spec) > 0))
 		}
 	}
 	return &ast.DeclStmt{
@@ -21,8 +21,27 @@ func Var(spec ...ast.Spec) ast.Stmt {
 	}
 }
 
+// varSpecDependOnCount fixes the error of associating the declaration of variable values with their types.
+// In other words, if you apply TypeSpec here, it's wrong, use VariableType instead.
+func varSpecDependOnCount(spec ast.Spec, multiValue bool) ast.Spec {
+	if !multiValue {
+		return spec
+	}
+	if t, ok := spec.(*ast.TypeSpec); ok {
+		return &ast.ValueSpec{
+			Doc:     t.Doc,
+			Names:   []*ast.Ident{t.Name},
+			Type:    t.Type,
+			Comment: t.Comment,
+		}
+	}
+	return spec
+}
+
 // Return represents return statement
-//   return a, b, c, ...
+//
+//	return a, b, c, ...
+//
 // nil values will be excluded
 func Return(results ...ast.Expr) *ast.ReturnStmt {
 	var ret = ast.ReturnStmt{
@@ -37,15 +56,18 @@ func Return(results ...ast.Expr) *ast.ReturnStmt {
 }
 
 // ReturnEmpty represents empty return statement
-//   return
+//
+//	return
 func ReturnEmpty() ast.Stmt {
 	return Return()
 }
 
 // Block represents block of statement
-//   {
-//      ... // statements
-//   }
+//
+//	{
+//	   ... // statements
+//	}
+//
 // nil values will be excluded from List
 func Block(statements ...ast.Stmt) *ast.BlockStmt {
 	var block = ast.BlockStmt{
@@ -60,7 +82,9 @@ func Block(statements ...ast.Stmt) *ast.BlockStmt {
 }
 
 // If represents `if` statement
-//   if <condition> { <body> }
+//
+//	if <condition> { <body> }
+//
 // nil values will be excluded from Body.List
 func If(condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 	return &ast.IfStmt{
@@ -71,7 +95,9 @@ func If(condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 }
 
 // IfElse represents `if` statement
-//   if <condition> { <body> } else { <alternative> }
+//
+//	if <condition> { <body> } else { <alternative> }
+//
 // nil values will be excluded from Body.List
 func IfElse(condition ast.Expr, body *ast.BlockStmt, alternative *ast.BlockStmt) ast.Stmt {
 	return &ast.IfStmt{
@@ -83,7 +109,9 @@ func IfElse(condition ast.Expr, body *ast.BlockStmt, alternative *ast.BlockStmt)
 }
 
 // IfInit represents `if` statement with initialization
-//   if <init>; <condition> { <body> }
+//
+//	if <init>; <condition> { <body> }
+//
 // nil values will be excluded from Body.List
 func IfInit(initiation ast.Stmt, condition ast.Expr, body ...ast.Stmt) ast.Stmt {
 	return &ast.IfStmt{
@@ -95,7 +123,9 @@ func IfInit(initiation ast.Stmt, condition ast.Expr, body ...ast.Stmt) ast.Stmt 
 }
 
 // IfInitElse represents `if` statement with initialization and with else block
-//   if <init>; <condition> { <body> } else { <alternative> }
+//
+//	if <init>; <condition> { <body> } else { <alternative> }
+//
 // nil values will be excluded from Body.List
 func IfInitElse(initiation ast.Stmt, condition ast.Expr, body *ast.BlockStmt, alternative *ast.BlockStmt) ast.Stmt {
 	if alternative == nil {
@@ -111,7 +141,9 @@ func IfInitElse(initiation ast.Stmt, condition ast.Expr, body *ast.BlockStmt, al
 }
 
 // Range represents `for` statement with range expression
-//   for <key>, <value> := range <x> { <body> }
+//
+//	for <key>, <value> := range <x> { <body> }
+//
 // ":=" replaced by "=" if define is FALSE
 func Range(define bool, key, value string, x ast.Expr, body ...ast.Stmt) ast.Stmt {
 	var (
