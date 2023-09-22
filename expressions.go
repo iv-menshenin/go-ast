@@ -16,15 +16,16 @@ type (
 		Expression
 		FillKeyValue(key string, value ast.Expr) StructFiller
 	}
-	BoolConstant     bool
-	StringConstant   string  // string constant e.g. "abc"
-	RuneConstant     rune    // rune constant e.g. 'r'
-	IntegerConstant  int64   // integer constant e.g. 123
-	UnsignedConstant uint64  // unsigned integer constant e.g. 123
-	FloatConstant    float64 // float constant e.g. 123.45
-	SliceByteLiteral []byte  // []byte{'f', 'i', 'l', 't', 'e', 'r'}
-	VariableName     string  // any variable name
-	freeExpression   struct {
+	BoolConstant       bool
+	StringConstant     string   // string constant e.g. "abc"
+	RuneConstant       rune     // rune constant e.g. 'r'
+	IntegerConstant    int64    // integer constant e.g. 123
+	UnsignedConstant   uint64   // unsigned integer constant e.g. 123
+	FloatConstant      float64  // float constant e.g. 123.45
+	SliceByteLiteral   []byte   // []byte{'f', 'i', 'l', 't', 'e', 'r'}
+	SliceStringLiteral []string // []string{"abc", "def"}
+	VariableName       string   // any variable name
+	freeExpression     struct {
 		expr ast.Expr
 	}
 
@@ -108,6 +109,23 @@ func (s SliceByteLiteral) Expr() ast.Expr {
 	}
 }
 
+func (s SliceStringLiteral) Expr() ast.Expr {
+	var elts []ast.Expr
+	for _, str := range s {
+		str = strings.Replace(str, "\\", "\\\\", -1)
+		str = strings.Replace(str, "\"", "\\\"", -1)
+		var val = "\"" + string(str) + "\""
+		elts = append(elts, &ast.BasicLit{
+			Kind:  token.STRING,
+			Value: val,
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: String},
+		Elts: elts,
+	}
+}
+
 // Expr creates ast.Ident with variable name
 func (c VariableName) Expr() ast.Expr {
 	return ast.NewIdent(string(c))
@@ -145,7 +163,8 @@ func (c *structLiteral) FillKeyValue(key string, value ast.Expr) StructFiller {
 }
 
 // Index creates the array element picker expression
-//   someArr[1]
+//
+//	someArr[1]
 func Index(x ast.Expr, index Expression) ast.Expr {
 	return &ast.IndexExpr{
 		X:      x,
@@ -170,19 +189,22 @@ func Selector(x ast.Expr, object string) ast.Expr {
 }
 
 // Unary represents unary expression
-//   <tok><expr> e.g. !expr
+//
+//	<tok><expr> e.g. !expr
+//
 // you can use this constant as `tok` attribute:
-//   token.ADD     // +
-//   token.SUB     // -
-//   token.MUL     // *
-//   token.QUO     // /
-//   token.REM     // %
-//   token.AND     // &
-//   token.OR      // |
-//   token.XOR     // ^
-//   token.SHL     // <<
-//   token.SHR     // >>
-//   token.AND_NOT // &^
+//
+//	token.ADD     // +
+//	token.SUB     // -
+//	token.MUL     // *
+//	token.QUO     // /
+//	token.REM     // %
+//	token.AND     // &
+//	token.OR      // |
+//	token.XOR     // ^
+//	token.SHL     // <<
+//	token.SHR     // >>
+//	token.AND_NOT // &^
 func Unary(expr ast.Expr, tok token.Token) ast.Expr {
 	if tok == token.MUL {
 		return Star(expr)
@@ -195,7 +217,8 @@ func Unary(expr ast.Expr, tok token.Token) ast.Expr {
 }
 
 // Star represents star expression
-//   *<expr>
+//
+//	*<expr>
 func Star(expr ast.Expr) ast.Expr {
 	return &ast.StarExpr{
 		Star: 1,
@@ -204,19 +227,22 @@ func Star(expr ast.Expr) ast.Expr {
 }
 
 // Ref represents reference
-//   &<expr>
+//
+//	&<expr>
 func Ref(expr ast.Expr) ast.Expr {
 	return Unary(expr, token.AND)
 }
 
 // Not represents inversion
-//   !<expr>
+//
+//	!<expr>
 func Not(expr ast.Expr) ast.Expr {
 	return Unary(expr, token.NOT)
 }
 
 // Binary represents binary expression. Use token.* constants as `tok` attribute
-//   <left> <tok> <right> e.g. left == right
+//
+//	<left> <tok> <right> e.g. left == right
 func Binary(left, right ast.Expr, tok token.Token) ast.Expr {
 	if left == nil || right == nil {
 		panic("unsupported")
@@ -230,7 +256,8 @@ func Binary(left, right ast.Expr, tok token.Token) ast.Expr {
 }
 
 // ArrayType represents array expression, use `l` attribute if you want to specify array length, else omit
-//   [<l>]<expr>
+//
+//	[<l>]<expr>
 func ArrayType(expr ast.Expr, l ...ast.Expr) ast.Expr {
 	var lenExpr ast.Expr = nil
 	if len(l) > 0 {
@@ -247,7 +274,8 @@ func ArrayType(expr ast.Expr, l ...ast.Expr) ast.Expr {
 }
 
 // MapType represents map expression
-//   map[<T>]<expr>
+//
+//	map[<T>]<expr>
 func MapType(key, expr ast.Expr) ast.Expr {
 	return &ast.MapType{
 		Map:   1,
@@ -257,25 +285,29 @@ func MapType(key, expr ast.Expr) ast.Expr {
 }
 
 // NotEqual represents comparison operation
-//   <left> != <right>
+//
+//	<left> != <right>
 func NotEqual(left, right ast.Expr) ast.Expr {
 	return Binary(left, right, token.NEQ)
 }
 
 // Equal represents comparison operation
-//   <left> == <right>
+//
+//	<left> == <right>
 func Equal(left, right ast.Expr) ast.Expr {
 	return Binary(left, right, token.EQL)
 }
 
 // Great represents comparison operation
-//   <left> > <right>
+//
+//	<left> > <right>
 func Great(left, right ast.Expr) ast.Expr {
 	return Binary(left, right, token.GTR)
 }
 
 // Add represents an addition operation
-//   <expr1> + <expr2> + <expr3>
+//
+//	<expr1> + <expr2> + <expr3>
 func Add(exps ...ast.Expr) ast.Expr {
 	var acc ast.Expr = nil
 	for _, expr := range exps {
@@ -289,7 +321,8 @@ func Add(exps ...ast.Expr) ast.Expr {
 }
 
 // Sub represents a subtraction operation
-//   <expr1> - <expr2> - <expr3>
+//
+//	<expr1> - <expr2> - <expr3>
 func Sub(exps ...ast.Expr) ast.Expr {
 	var acc ast.Expr = nil
 	for _, expr := range exps {
@@ -303,19 +336,22 @@ func Sub(exps ...ast.Expr) ast.Expr {
 }
 
 // NotNil represents non-nil-comparison operation
-//   <expr> != nil
+//
+//	<expr> != nil
 func NotNil(expr ast.Expr) ast.Expr {
 	return Binary(expr, Nil, token.NEQ)
 }
 
 // IsNil represents nil-comparison operation
-//   <expr> == nil
+//
+//	<expr> == nil
 func IsNil(expr ast.Expr) ast.Expr {
 	return Binary(expr, Nil, token.EQL)
 }
 
 // And represents `&&` in comparison operation
-//   <expr> && <expr> && <expr>
+//
+//	<expr> && <expr> && <expr>
 func And(left ast.Expr, expr ...ast.Expr) ast.Expr {
 	if len(expr) == 0 {
 		return left
@@ -324,7 +360,8 @@ func And(left ast.Expr, expr ...ast.Expr) ast.Expr {
 }
 
 // Or represents `||` in comparison operation
-//   <expr> || <expr> || <expr>
+//
+//	<expr> || <expr> || <expr>
 func Or(left ast.Expr, expr ...ast.Expr) ast.Expr {
 	if len(expr) == 0 {
 		return left
@@ -333,7 +370,8 @@ func Or(left ast.Expr, expr ...ast.Expr) ast.Expr {
 }
 
 // VariableTypeAssert represents variable type assertion expression
-//   <varName>.(<t>) e.g. varName.(string)
+//
+//	<varName>.(<t>) e.g. varName.(string)
 func VariableTypeAssert(varName string, t ast.Expr) ast.Expr {
 	return &ast.TypeAssertExpr{
 		X:    ast.NewIdent(varName),
@@ -342,7 +380,8 @@ func VariableTypeAssert(varName string, t ast.Expr) ast.Expr {
 }
 
 // ExpressionTypeAssert represents expression type assertion
-//   <expr>.(<t>) e.g. varName.(string)
+//
+//	<expr>.(<t>) e.g. varName.(string)
 func ExpressionTypeAssert(expr, t ast.Expr) ast.Expr {
 	return &ast.TypeAssertExpr{
 		X:    expr,
@@ -351,7 +390,8 @@ func ExpressionTypeAssert(expr, t ast.Expr) ast.Expr {
 }
 
 // VariableTypeConvert represents variable type conversion expression
-//   <t>(<varName>) e.g. string(varName)
+//
+//	<t>(<varName>) e.g. string(varName)
 func VariableTypeConvert(varName string, t ast.Expr) ast.Expr {
 	return Call(
 		CallFunctionDescriber{
@@ -364,7 +404,8 @@ func VariableTypeConvert(varName string, t ast.Expr) ast.Expr {
 }
 
 // ExpressionTypeConvert represents the expression type conversion expression
-//   <t>(<expr>) e.g. string(varName)
+//
+//	<t>(<expr>) e.g. string(varName)
 func ExpressionTypeConvert(expr ast.Expr, t ast.Expr) ast.Expr {
 	return Call(
 		CallFunctionDescriber{
@@ -377,7 +418,8 @@ func ExpressionTypeConvert(expr ast.Expr, t ast.Expr) ast.Expr {
 }
 
 // MakeLenGreatThanZero makes len() > 0 expression
-//   len(<arrayName>) > 0
+//
+//	len(<arrayName>) > 0
 func MakeLenGreatThanZero(arrayName string) ast.Expr {
 	return &ast.BinaryExpr{
 		X:  Call(LengthFn, ast.NewIdent(arrayName)),
