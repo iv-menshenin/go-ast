@@ -207,7 +207,7 @@ type (
 )
 
 func (s *interfaceTypeFiller) Inherits(name string, tag *ast.BasicLit, docAndComments ...string) {
-	s.flds = append(s.flds, Field(name, tag, nil, docAndComments...))
+	s.flds = append(s.flds, Field("", tag, NewIdent(name), docAndComments...))
 }
 
 func (s *interfaceTypeFiller) Method(decl MethodDecl, tag *ast.BasicLit, docAndComments ...string) {
